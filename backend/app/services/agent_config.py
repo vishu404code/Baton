@@ -50,6 +50,11 @@ def build_config(agent: Agent, token: str | None = None) -> dict:
                 ),
                 "env": f"export BATON_TOKEN={tok}",
             },
+            "antigravity": {
+                "title": "Antigravity",
+                "description": "Add to ~/.gemini/config/mcp_config.json (or <workspace>/.agents/mcp_config.json), then reload MCP servers in Antigravity. Remote servers must use Streamable HTTP.",
+                "mcp_config_json": json.dumps({"mcpServers": {SERVER_NAME: {"serverUrl": url, "headers": {"Authorization": auth}}}}, indent=2),
+            },
             "gemini_cli": {
                 "title": "Gemini CLI",
                 "description": "Add to ~/.gemini/settings.json (or .gemini/settings.json in the project).",

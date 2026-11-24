@@ -63,7 +63,7 @@ def _ts(nullable: bool = False) -> Mapped[datetime]:
 
 # --- Enumerations (stored as strings, validated in code) ---------------------------------
 MEMBER_ROLES = ("owner", "mentor", "member")
-AGENT_TOOLS = ("claude_code", "codex", "gemini_cli", "cursor", "other")
+AGENT_TOOLS = ("claude_code", "codex", "gemini_cli", "cursor", "antigravity", "other")
 AGENT_ROLES = ("planner", "reviewer", "observer")
 RECORD_TYPES = ("brief", "decision", "task", "source", "draft", "review")
 RECORD_STATUSES = ("open", "claimed", "in_review", "approved", "stale", "rejected")
@@ -118,6 +118,9 @@ class Agent(Base):
     tool: Mapped[str] = mapped_column(String(16))
     role: Mapped[str] = mapped_column(String(16))
     color: Mapped[str] = mapped_column(String(7))
+    # Set for agents Baton runs itself through an AI provider's API (Claude, ChatGPT, DeepSeek, Gemini, demo).
+    provider: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(80), nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     last_seen_at: Mapped[datetime | None] = _ts(nullable=True)
     revoked_at: Mapped[datetime | None] = _ts(nullable=True)

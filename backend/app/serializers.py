@@ -110,6 +110,16 @@ def active_claim_for_agent(db: Session, agent_id: uuid.UUID) -> tuple[Claim, Rec
     return (row[0], row[1]) if row else None
 
 
+def _runnable(agent: Agent) -> bool:
+    """True when Baton can run this agent itself (its AI provider is set up)."""
+    if not agent.provider or agent.revoked_at is not None:
+        return False
+    from app.llm import registry, store
+
+    p = registry.PROVIDERS.get(agent.provider)
+    return p is not None and (not p.info.needs_key or bool(store.get(p.info)["api_key"]))
+
+
 def agent_out(db: Session, agent: Agent, user_name: str | None = None) -> dict:
     if user_name is None:
         user_name = db.get(User, agent.user_id).display_name
@@ -123,6 +133,9 @@ def agent_out(db: Session, agent: Agent, user_name: str | None = None) -> dict:
         "tool": agent.tool,
         "role": agent.role,
         "color": agent.color,
+        "provider": agent.provider,
+        "model": agent.model,
+        "runnable": _runnable(agent),
         "online": presence.agent_online(agent),
         "last_seen_at": iso(agent.last_seen_at),
         "working_on": (

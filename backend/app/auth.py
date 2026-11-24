@@ -10,7 +10,7 @@ from fastapi import Depends, Header
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.db import get_db, read_session
 from app.errors import ApiError, forbidden, not_found
 from app.models import Agent, Room, RoomMember, User, UserSession
 
@@ -58,6 +58,18 @@ def current_user(authorization: str | None = Header(default=None), db: Session =
     if token and token.startswith(AGENT_PREFIX):
         raise ApiError(401, "Agent tokens only work on /mcp. Use a session token from POST /api/session.")
     user = user_from_token(db, token)
+    if user is None:
+        raise ApiError(401, "Missing or invalid session token. Sign in with POST /api/session.")
+    return user
+
+
+def current_user_ro(authorization: str | None = Header(default=None)) -> User:
+    """Like current_user but without holding a write transaction (for slow calls: AI providers, runs)."""
+    token = bearer(authorization)
+    if token and token.startswith(AGENT_PREFIX):
+        raise ApiError(401, "Agent tokens only work on /mcp. Use a session token from POST /api/session.")
+    with read_session() as db:
+        user = user_from_token(db, token)
     if user is None:
         raise ApiError(401, "Missing or invalid session token. Sign in with POST /api/session.")
     return user

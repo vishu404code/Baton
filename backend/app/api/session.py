@@ -43,6 +43,18 @@ def demo_session(body: SessionIn, db: Session = Depends(get_db)) -> dict:
     return _issue(db, user)
 
 
+@router.post("/session/local")
+def local_session(db: Session = Depends(get_db)) -> dict:
+    """Desktop mode: sign in as the one local owner (created with a starter project on first launch)."""
+    from app.config import get_settings
+    from app.services import bootstrap
+
+    if not get_settings().baton_local_mode:
+        raise not_found("Local mode is off.")
+    user, room = bootstrap.ensure_local_workspace(db)
+    return {**_issue(db, user), "room_id": str(room.id)}
+
+
 @router.get("/me")
 def me(user: User = Depends(current_user)) -> dict:
     return {"user": user_out(user)}

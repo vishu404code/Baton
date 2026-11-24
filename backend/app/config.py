@@ -21,6 +21,10 @@ class Settings(BaseSettings):
 
     log_level: str = "info"
 
+    # Desktop / single-device mode: one local owner, no sign-in screen, and the built UI served from here.
+    baton_local_mode: bool = False
+    baton_static_dir: str = ""
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.baton_cors_origins.split(",") if o.strip()]

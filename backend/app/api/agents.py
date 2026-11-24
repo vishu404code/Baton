@@ -43,7 +43,14 @@ def create_agent(
     room_id: uuid.UUID, body: AgentCreateIn, user: User = Depends(current_user), db: Session = Depends(get_db)
 ) -> dict:
     room, _ = get_membership(db, room_id, user)
-    agent, token = room_svc.create_agent(db, room, user, body.name, body.tool, body.role)
+    from app.llm import registry, store
+
+    tool, model = body.tool, body.model
+    if body.provider:
+        if tool == "other":
+            tool = registry.TOOL_FOR_PROVIDER.get(body.provider, "other")
+        model = model or store.get(registry.PROVIDERS[body.provider].info)["model"]
+    agent, token = room_svc.create_agent(db, room, user, body.name, tool, body.role, body.provider, model)
     db.commit()
     return {"agent": agent_out(db, agent, user.display_name), "token": token, "config": build_config(agent, token)}
 

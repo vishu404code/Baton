@@ -34,8 +34,11 @@ class MemberRoleIn(_In):
 
 class AgentCreateIn(_In):
     name: str = Field(min_length=1, max_length=60)
-    tool: Literal["claude_code", "codex", "gemini_cli", "cursor", "other"]
+    tool: Literal["claude_code", "codex", "gemini_cli", "cursor", "antigravity", "other"] = "other"
     role: Literal["planner", "reviewer", "observer"]
+    # Optional: have Baton run this agent itself through an AI provider's API.
+    provider: Literal["anthropic", "openai", "deepseek", "gemini", "mock"] | None = None
+    model: str | None = Field(default=None, max_length=80)
 
     @field_validator("name")
     @classmethod

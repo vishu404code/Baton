@@ -41,6 +41,9 @@ def db_clean(database):
     reset_engines()
     shutil.rmtree(data_dir(), ignore_errors=True)
     init_db()
+    keys = os.environ["BATON_PROVIDER_KEYS_FILE"]
+    if os.path.exists(keys):
+        os.remove(keys)
     yield
 
 

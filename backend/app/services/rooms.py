@@ -94,7 +94,10 @@ def update_settings(room: Room, patch: dict) -> list[str]:
     return changed
 
 
-def create_agent(db: Session, room: Room, owner: User, name: str, tool: str, role: str) -> tuple[Agent, str]:
+def create_agent(
+    db: Session, room: Room, owner: User, name: str, tool: str, role: str,
+    provider: str | None = None, model: str | None = None,
+) -> tuple[Agent, str]:
     """Create an agent and return it with its plaintext token (shown once; only the hash is stored)."""
     token, token_hash = new_token(AGENT_PREFIX)
     n = db.execute(select(func.count()).select_from(Agent).where(Agent.room_id == room.id)).scalar_one()
@@ -105,6 +108,8 @@ def create_agent(db: Session, room: Room, owner: User, name: str, tool: str, rol
         tool=tool,
         role=role,
         color=AGENT_COLORS[n % len(AGENT_COLORS)],
+        provider=provider,
+        model=model,
         token_hash=token_hash,
     )
     db.add(agent)

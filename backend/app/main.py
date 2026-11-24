@@ -12,7 +12,7 @@ from starlette.routing import Route
 
 from app import __version__
 from app import logging_filters, ws
-from app.api import agents, approvals, evidence, records, rooms, session
+from app.api import agents, approvals, evidence, providers, records, rooms, runs, session
 from app.config import get_settings
 from app.db import SessionLocal, db_ok, init_db
 from app.errors import install_error_handlers
@@ -74,7 +74,7 @@ app.add_middleware(
 )
 install_error_handlers(app)
 
-for module in (session, rooms, agents, records, approvals, evidence, ws):
+for module in (session, rooms, agents, records, approvals, evidence, providers, runs, ws):
     app.include_router(module.router)
 
 # MCP over Streamable HTTP, for agents. Both /mcp and /mcp/ work (no redirect for POST).
@@ -87,3 +87,14 @@ def health() -> JSONResponse:
     ok = db_ok()
     body = {"status": "ok" if ok else "degraded", "db": "ok" if ok else "unreachable", "version": __version__}
     return JSONResponse(body, status_code=200 if ok else 503)
+
+
+# Desktop app: serve the built UI from the same origin as the API (added last so it never shadows a route).
+if settings.baton_static_dir:
+    from pathlib import Path
+
+    from fastapi.staticfiles import StaticFiles
+
+    _static = Path(settings.baton_static_dir)
+    if _static.is_dir():
+        app.mount("/", StaticFiles(directory=_static, html=True), name="ui")
