@@ -14,3 +14,8 @@ frontend/dist/
 1-CLAUDE-CODE-BACKEND-PROMPT.md
 # v2 SQLite database files
 data/
+
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.DS_Store
