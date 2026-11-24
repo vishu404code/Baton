@@ -22,7 +22,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [roomName, setRoomName] = useState('');
-  const [inviteCode, setInviteCode] = useState('CAMPUS-7KQ2');
+  const [inviteCode, setInviteCode] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -136,7 +136,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({
         <button
           onClick={() => {
             setErrorMsg('');
-            setInviteCode('CAMPUS-7KQ2');
+            setInviteCode('');
             setShowJoinModal(true);
           }}
           title="Join with invite code"
@@ -225,7 +225,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({
                 <input
                   type="text"
                   autoFocus
-                  placeholder="e.g. CAMPUS-7KQ2"
+                  placeholder="e.g. MY-4K7Q"
                   value={inviteCode}
                   onChange={(e) => setInviteCode(e.target.value)}
                   className="w-full px-3 py-2 bg-[#111217] border border-[#2A2D37] rounded-lg text-[#E6E7EB] font-mono text-sm uppercase tracking-wider focus:outline-none focus:border-[#6366F1]"

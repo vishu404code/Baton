@@ -1,0 +1,53 @@
+{
+  "name": "baton-desktop",
+  "version": "1.0.0",
+  "description": "Baton: a desktop workspace where several AI models work one project together",
+  "main": "main.js",
+  "author": "Baton",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "ui": "npm --prefix ../frontend run build",
+    "pack": "npm run ui && electron-builder --dir",
+    "dist": "npm run ui && electron-builder --mac dmg"
+  },
+  "build": {
+    "appId": "com.baton.desktop",
+    "productName": "Baton",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "loading.html",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend",
+        "to": "backend",
+        "filter": [
+          "app/**/*",
+          "pyproject.toml",
+          "uv.lock",
+          "!**/__pycache__/**",
+          "!**/*.pyc"
+        ]
+      },
+      {
+        "from": "../frontend/dist",
+        "to": "ui"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": "dir",
+      "identity": null
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0"
+  }
+}

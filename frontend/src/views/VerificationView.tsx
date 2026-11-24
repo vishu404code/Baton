@@ -23,23 +23,16 @@ interface VerificationViewProps {
 
 const CHECK_DISPLAY_NAMES: Record<CheckName, string> = {
   claim_valid: 'Holds the claim',
-  permission: 'Allowed for role',
   revisions_current: 'Based on current revisions',
+  content_schema: 'Content complete',
+  // Older checks (kept so previously stored submissions still render)
+  permission: 'Allowed for role',
   no_conflicting_edit: 'No conflicting edit',
   citations_present: 'Cites sources',
   sources_exist: 'Sources exist',
-  content_schema: 'Content complete',
 };
 
-const ALL_CHECK_NAMES: CheckName[] = [
-  'claim_valid',
-  'permission',
-  'revisions_current',
-  'no_conflicting_edit',
-  'citations_present',
-  'sources_exist',
-  'content_schema',
-];
+const ALL_CHECK_NAMES: CheckName[] = ['claim_valid', 'revisions_current', 'content_schema'];
 
 export const VerificationView: React.FC<VerificationViewProps> = ({ roomId }) => {
   const [selectedAgentId, setSelectedAgentId] = useState<string>('all');
@@ -79,7 +72,7 @@ export const VerificationView: React.FC<VerificationViewProps> = ({ roomId }) =>
             <span className="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse" />
           </h1>
           <p className="text-xs text-[#8B8FA3]">
-            Every agent submission undergoes 7 deterministic checks before it is accepted.
+            Every agent submission undergoes 3 essential checks before it is accepted.
           </p>
         </div>
 
@@ -309,7 +302,7 @@ export const VerificationView: React.FC<VerificationViewProps> = ({ roomId }) =>
                     <div className="flex items-center gap-2 font-semibold">
                       <CheckCircle2 className="w-4 h-4" />
                       <span>
-                        All 7 checks passed.{' '}
+                        All 3 checks passed.{' '}
                         {sub.result_revision_id
                           ? `Applied as revision ${sub.result_revision_id}`
                           : 'Draft applied.'}

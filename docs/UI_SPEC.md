@@ -1,4 +1,6 @@
-# Baton UI Spec (v1)
+# Baton UI Spec
+
+> **v3 (desktop app):** adds an **AI Models** screen (keys and models per provider), **Run** buttons on the Board and a **Run all open tasks** button, an AI picker in *Connect an Agent*, and shows three verification checks instead of seven. In the desktop app there is no sign-in screen. The sections below describe the earlier screens; where they mention 7 checks or check toggles in Settings, those are gone.
 
 This is for the frontend team (built in Google Antigravity, in `frontend/`). The backend never touches `frontend/`. All data comes from `docs/API_CONTRACT.md`, and section numbers like "API §6" refer to that file.
 

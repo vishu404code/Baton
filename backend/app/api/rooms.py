@@ -31,7 +31,8 @@ def list_my_rooms(user: User = Depends(current_user), db: Session = Depends(get_
         .where(RoomMember.user_id == user.id)
         .order_by(RoomMember.joined_at)
     ).all()
-    return {"rooms": [room_summary_out(db, room, role) for room, role in rows]}
+    # Full room objects (invite code, settings...), so the UI never has to guess them.
+    return {"rooms": [room_out(db, room, role) | {"unread_hint": False} for room, role in rows]}
 
 
 @router.post("/join")

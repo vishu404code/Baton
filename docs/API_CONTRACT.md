@@ -1,3 +1,19 @@
+# Baton API Contract
+
+> **Read this first: v3 (desktop app) changes.** The rest of this document describes the v1 shapes, which still apply except for the following.
+>
+> - **Three checks, not seven.** Submissions run `claim_valid`, `revisions_current`, `content_schema` (in that order). `permission`, `no_conflicting_edit`, `citations_present` and `sources_exist` no longer exist; cited sources are verified inside `content_schema`. Wherever this document says "7 checks", read 3.
+> - **Room settings** are only `lease_minutes` and `require_approval` (default **false**; a redo of stale work always needs approval). `checks` and `min_sources` are gone, and `PATCH …/settings` rejects them.
+> - **`GET /api/rooms`** now returns full room objects (invite code, settings, counts), not summaries.
+> - **Agents** gain `provider` (`anthropic | openai | deepseek | gemini | mock | null`), `model` and `runnable`. `POST …/agents` accepts `provider` and `model`; with a provider the agent is run by Baton itself (`tool` is derived). `tool` may also be `antigravity`.
+> - **New endpoints**
+>   - `POST /api/session/local`: desktop mode only; signs in as the single local owner and returns `{user, token, room_id}`.
+>   - `GET /api/providers`, `PUT /api/providers/{id}` `{api_key?, model?, base_url?}`, `POST /api/providers/{id}/test`: AI model settings. API keys are never returned (only `has_key`, `key_hint`).
+>   - `POST /api/rooms/{room_id}/tasks/{task_ref}/run` `{agent_id?}` → `202 {run_id}`; `POST /api/rooms/{room_id}/run-open`; `GET /api/runs/{run_id}` → `{status: running|done|rejected|failed, message, result?, steps?}`.
+> - **New events:** `agent.run_started`, `agent.run_finished`, `agent.run_failed` (payload includes `run_id`, `model`, token counts).
+> - The agent `config` response adds an `antigravity` snippet (`mcp_config_json`).
+> - Storage is a single SQLite file; there is no Docker or Postgres.
+
 # Baton API Contract (v1)
 
 This is the contract between the Baton backend and the frontend. The frontend team builds against it in parallel, so **any change here must be agreed and noted in the changelog at the bottom**. FastAPI also serves live OpenAPI docs at `http://localhost:8000/docs`; if the two disagree, raise it, don't guess.

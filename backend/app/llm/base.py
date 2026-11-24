@@ -37,7 +37,7 @@ class ProviderConfig:
 
 def friendly_http_error(provider: str, status: int, body: str) -> LLMError:
     detail = (body or "").strip().replace("\n", " ")[:240]
-    if status in (401, 403):
+    if status in (401, 403) or "api key not valid" in (body or "").lower():
         return LLMError(f"{provider} rejected the API key (HTTP {status}). Check the key in Settings → AI models.")
     if status == 404:
         return LLMError(f"{provider} doesn't know that model (HTTP 404). Pick another model. {detail}")

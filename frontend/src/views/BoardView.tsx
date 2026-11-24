@@ -7,6 +7,9 @@ import {
   Clock,
   Sparkles,
   ArrowRight,
+  Play,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { BoardResponse, BoardTask, Role, Status } from '../api/types';
 import { api } from '../api/client';
@@ -41,6 +44,67 @@ export const BoardView: React.FC<BoardViewProps> = ({ roomId, myRole }) => {
   });
 
   const isMentor = myRole === 'owner' || myRole === 'mentor';
+
+  // --- Run AI agents on tasks ---
+  const [runBanner, setRunBanner] = useState<{ ok: boolean; text: string } | null>(null);
+  const [running, setRunning] = useState<Record<string, boolean>>({});
+
+  const refreshAll = () => {
+    for (const k of ['board', 'events', 'submissions', 'records', 'agents', 'approvals']) {
+      queryClient.invalidateQueries({ queryKey: [k, roomId] });
+    }
+  };
+
+  const waitForRun = async (runId: string) => {
+    for (let i = 0; i < 900; i++) {
+      const r = await api.getRun(runId);
+      if (r.status !== 'running') return r;
+      if (i % 2 === 0) refreshAll();
+      await new Promise((res) => setTimeout(res, 1000));
+    }
+    throw new Error('Timed out waiting for the agent.');
+  };
+
+  const handleRun = async (label: string) => {
+    setRunBanner(null);
+    setRunning((p) => ({ ...p, [label]: true }));
+    try {
+      const started = await api.runTask(roomId, label);
+      const r = await waitForRun(started.run_id);
+      const ok = r.status === 'done';
+      setRunBanner({
+        ok,
+        text: ok ? `${started.agent} finished ${label}. ${r.message ?? ''}` : `${started.agent}: ${r.message ?? 'did not finish.'}`,
+      });
+    } catch (e: any) {
+      setRunBanner({ ok: false, text: e.message || 'Could not start the agent.' });
+    } finally {
+      setRunning((p) => ({ ...p, [label]: false }));
+      refreshAll();
+    }
+  };
+
+  const handleRunAll = async () => {
+    setRunBanner(null);
+    setRunning((p) => ({ ...p, __all: true }));
+    try {
+      const started = await api.runOpenTasks(roomId);
+      const r = await waitForRun(started.run_id);
+      const steps = r.steps || [];
+      const failed = steps.filter((s) => s.status !== 'done');
+      setRunBanner({
+        ok: steps.length > 0 && failed.length === 0,
+        text: steps.length
+          ? steps.map((s) => `${s.task}: ${s.status}${s.agent ? ` (${s.agent})` : ''}${s.status !== 'done' && s.message ? ` — ${s.message}` : ''}`).join('  ·  ')
+          : 'No open tasks to run.',
+      });
+    } catch (e: any) {
+      setRunBanner({ ok: false, text: e.message || 'Could not start the agents.' });
+    } finally {
+      setRunning((p) => ({ ...p, __all: false }));
+      refreshAll();
+    }
+  };
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,6 +204,17 @@ export const BoardView: React.FC<BoardViewProps> = ({ roomId, myRole }) => {
 
         {isMentor && (
           <button
+            onClick={handleRunAll}
+            disabled={!!running.__all}
+            title="Run every open or stale task with a ready AI agent"
+            className="px-3.5 py-1.5 bg-[#22C55E]/15 border border-[#22C55E]/40 hover:bg-[#22C55E]/25 text-[#22C55E] rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-60 mr-2"
+          >
+            {running.__all ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            <span>{running.__all ? 'Agents working…' : 'Run all open tasks'}</span>
+          </button>
+        )}
+        {isMentor && (
+          <button
             onClick={() => setShowNewTaskModal(true)}
             className="px-3.5 py-1.5 bg-[#6366F1] hover:bg-[#4F46E5] text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
           >
@@ -151,6 +226,20 @@ export const BoardView: React.FC<BoardViewProps> = ({ roomId, myRole }) => {
 
       {/* Main Board Table */}
       <div className="flex-1 overflow-y-auto p-6">
+        {runBanner && (
+          <div
+            className={`mb-4 px-3.5 py-2.5 rounded-xl border text-xs flex items-start justify-between gap-3 ${
+              runBanner.ok
+                ? 'bg-[#22C55E]/10 border-[#22C55E]/30 text-[#22C55E]'
+                : 'bg-[#EF4444]/10 border-[#EF4444]/30 text-[#EF4444]'
+            }`}
+          >
+            <span>{runBanner.text}</span>
+            <button onClick={() => setRunBanner(null)} className="opacity-70 hover:opacity-100">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3, 4].map((i) => (
@@ -179,6 +268,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ roomId, myRole }) => {
                   <th className="py-3 px-4">Output / Revision</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Last Updated</th>
+                  {isMentor && <th className="py-3 px-4 w-24">AI</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#2A2D37] text-xs">
@@ -254,6 +344,26 @@ export const BoardView: React.FC<BoardViewProps> = ({ roomId, myRole }) => {
                       <td className="py-3.5 px-4 text-[#8B8FA3] font-mono text-[11px]">
                         {formatTimeAgo(item.task.updated_at)}
                       </td>
+
+                      {/* Run with an AI agent */}
+                      {isMentor && (
+                        <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
+                          {(item.task.status === 'open' || item.task.status === 'stale') && (
+                            <button
+                              onClick={() => handleRun(item.task.label)}
+                              disabled={!!running[item.task.label] || !!running.__all}
+                              className="px-2.5 py-1 rounded-lg bg-[#6366F1]/15 border border-[#6366F1]/40 text-[#818CF8] hover:bg-[#6366F1]/25 text-[11px] font-semibold flex items-center gap-1 disabled:opacity-50"
+                            >
+                              {running[item.task.label] ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Play className="w-3 h-3" />
+                              )}
+                              {running[item.task.label] ? 'Running' : item.task.status === 'stale' ? 'Fix' : 'Run'}
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

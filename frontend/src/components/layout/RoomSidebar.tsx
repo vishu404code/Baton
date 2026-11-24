@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Users,
   Settings,
+  Cpu,
   ChevronDown,
   Copy,
   Check,
@@ -22,6 +23,7 @@ export type ActiveView =
   | 'recovery'
   | 'verification'
   | 'members'
+  | 'models'
   | 'settings';
 
 interface RoomSidebarProps {
@@ -97,6 +99,11 @@ export const RoomSidebar: React.FC<RoomSidebarProps> = ({
       icon: <Users className="w-4 h-4" />,
       badge: room?.counts?.agents ? room.counts.agents : undefined,
       badgeColor: 'bg-[#1D1F27] border border-[#2A2D37] text-[#8B8FA3]',
+    },
+    {
+      id: 'models',
+      label: 'AI Models',
+      icon: <Cpu className="w-4 h-4" />,
     },
     {
       id: 'settings',

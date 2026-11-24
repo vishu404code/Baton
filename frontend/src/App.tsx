@@ -13,6 +13,7 @@ import { RecoveryView } from './views/RecoveryView';
 import { TimelineView } from './views/TimelineView';
 import { MembersView } from './views/MembersView';
 import { SettingsView } from './views/SettingsView';
+import { ModelsView } from './views/ModelsView';
 import { api } from './api/client';
 import { useRoomWebSocket } from './api/useWebSocket';
 import { Room, Member, Agent, Event } from './api/types';
@@ -40,20 +41,31 @@ function BatonApp() {
     api.checkHealth();
   }, []);
 
-  // Check auth session
+  // Sign in: reuse the saved session; otherwise, in the desktop app, sign in as the local owner.
+  const [authChecked, setAuthChecked] = useState(false);
   useEffect(() => {
+    const signInLocally = async () => {
+      const local = await api.localSession();
+      if (local) {
+        setCurrentUser(local.user);
+        setSelectedRoomId(local.room_id);
+      }
+      setAuthChecked(true);
+    };
     const token = api.getToken();
     if (token) {
       api
         .getMe()
         .then((res) => {
-          if (res?.user) {
-            setCurrentUser(res.user);
-          }
+          if (res?.user) setCurrentUser(res.user);
+          setAuthChecked(true);
         })
         .catch(() => {
           api.setToken(null);
+          signInLocally();
         });
+    } else {
+      signInLocally();
     }
   }, []);
 
@@ -132,6 +144,10 @@ function BatonApp() {
     setSelectedRoomId(joinedRoom.id);
   };
 
+  if (!authChecked) {
+    return <div className="h-screen w-screen bg-[#0B0C0F] flex items-center justify-center text-xs text-[#8B8FA3]">Starting Baton…</div>;
+  }
+
   if (!currentUser) {
     return (
       <WelcomeModal
@@ -208,10 +224,11 @@ function BatonApp() {
               <MembersView
                 roomId={selectedRoomId}
                 myRole={selectedRoom?.my_role || 'member'}
-                inviteCode={selectedRoom?.invite_code || 'CAMPUS-7KQ2'}
+                inviteCode={selectedRoom?.invite_code || ''}
                 currentUserId={currentUser.id}
               />
             )}
+            {activeView === 'models' && <ModelsView />}
             {activeView === 'settings' && (
               <SettingsView
                 room={selectedRoom}

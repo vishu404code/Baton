@@ -1,122 +1,73 @@
 # Baton
 
-**A shared memory and handoff layer for AI coding agents.** Baton lets Claude Code, Codex, Gemini CLI and Cursor work on one project like teammates. They pass work between each other without losing context, using outdated decisions, or doing anything twice.
+**A desktop workspace where several AI models work on one project together.** Claude, ChatGPT, DeepSeek and Gemini (plus tools like Antigravity, Claude Code and Codex) share one project record: a brief, decisions, sources and tasks. Each AI claims a task, reads the same record, and submits its work. Every submission passes three checks before it is applied, and a change to a decision automatically flags only the work that depended on it.
 
-It works like a Discord server for agents. A mentor creates a **room**, teammates join with an **invite code**, and everyone connects their own agent. The mentor writes the brief and decisions and creates tasks. Agents claim tasks, read the shared record and submit work. Every submission passes **7 live verification checks** before it's applied, and everyone in the room watches it happen.
+Everything runs on your computer. There is no server, no Docker and no account: one app, one SQLite file.
 
-> Built for PS 01 (Generative AI): Multi-Agent Harness for a Shared Team Knowledge Base.
+## Run it
 
-## Quick start
-
-You need Docker Desktop (or OrbStack) running.
+You need **macOS**, **Node 20+** and **[uv](https://docs.astral.sh/uv/)** (`curl -LsSf https://astral.sh/uv/install.sh | sh`).
 
 ```bash
-./start.sh
+cd desktop
+npm install            # once
+npm run ui             # builds the interface (once, and after UI changes)
+npm start              # opens the Baton window
 ```
 
-This builds and starts Postgres and the backend, waits for `/health`, and seeds the demo room if the database is empty. It then prints:
-- the API URL (`http://localhost:8000`, with interactive docs at `/docs`)
-- the MCP URL for agents (`http://localhost:8000/mcp`)
-- the demo room's invite code (`CAMPUS-7KQ2`)
-- ready-to-paste setup for each demo agent
+The first launch installs Baton's Python packages (about a minute). After that it opens in seconds. You are signed in automatically and land in **My Project**, a starter project with two tasks and two offline demo agents, so you can press **Run all open tasks** right away.
 
-| Command | What it does |
-|---|---|
-| `./stop.sh` | Stop, keep data |
-| `./reset-demo.sh` | Wipe everything and re-seed the demo (asks first; `-y` skips the question) |
-| `docker compose exec backend python scripts/crash_demo.py` | Crash an agent after "saved" and show it's applied exactly once |
-| `docker compose exec backend python scripts/demo_run.py` | Autopilot: play the whole demo and check all six judging tests |
+To get a double-clickable app:
 
-To let teammates on the same Wi-Fi connect their agents, set `BATON_PUBLIC_URL=http://<your-LAN-IP>:8000` in `.env` and run `./reset-demo.sh -y`.
+```bash
+cd desktop && npm run pack      # creates desktop/dist/mac-arm64/Baton.app
+```
+
+Your data lives in `~/Library/Application Support/Baton/` (`data/baton.db`, `logs/`). Help → *Open data folder* shows it.
+
+## Use several AIs
+
+1. **AI Models** (left menu): paste an API key for each AI you want, press **Test**, pick a model. Keys stay on this computer in a private file and are never shown again.
+2. **Members & Agents → Connect an Agent**: choose *Which AI?*, a role (planner writes drafts, reviewer reviews them) and a name.
+3. **Board**: press **Run** on a task, or **Run all open tasks**. Baton gives the AI the project record, then submits its answer through the checks.
+
+| AI | How it joins | Needs |
+|---|---|---|
+| Claude (Anthropic) | Baton calls the API | API key |
+| ChatGPT (OpenAI) | Baton calls the API | API key |
+| DeepSeek | Baton calls the API | API key |
+| Gemini (Google) | Baton calls the API | API key |
+| Demo model | Runs offline on your computer | nothing |
+| Antigravity, Claude Code, Codex, Gemini CLI, Cursor | They connect to Baton over MCP and work tasks themselves | the config Baton shows in *Connect an Agent* |
 
 ## How it works
 
-- **Rooms like Discord servers.** Anyone can create a room and becomes its owner (mentor). Others join with the invite code, and the owner can promote mentors. Each member connects agents with their own token and a role: `planner`, `reviewer` or `observer`.
-- **One team record.** Briefs, decisions, sources, tasks, drafts and reviews are **append-only**. Every change is a new revision, and old ones are kept. Records have readable labels ("Decision 2", "Draft 1"); an output shares its task's number.
-- **Claims with leases.** `claim_task` gives one agent exclusive ownership for 15 minutes (enforced by the database), `heartbeat` extends it, and an expired lease frees the task.
-- **Live verification.** Every submit runs 7 checks in order, and each result streams to the room as it runs:
-
-  | # | Check | Fails when |
-  |---|---|---|
-  | 1 | `claim_valid` | The agent doesn't hold the task's lease |
-  | 2 | `permission` | The agent's role can't do this (e.g. a reviewer writing a draft) |
-  | 3 | `revisions_current` | It's built on an outdated revision: `stale: based on Decision 2 v1, now v2` |
-  | 4 | `no_conflicting_edit` | Someone changed the output since the agent's base revision |
-  | 5 | `citations_present` | The draft cites fewer than `min_sources` sources (room setting) |
-  | 6 | `sources_exist` | It cites a source that isn't in the room |
-  | 7 | `content_schema` | Required fields are missing (e.g. a review without a verdict) |
-
-  Checks 5–7 can be turned off per room.
-- **Stale propagation.** Editing a decision (or a brief or source) marks every output built on the old version stale, including indirect dependents such as a review of a stale draft. Independent work is untouched. A preview shows the impact before saving.
-- **Human approval.** Corrected stale work always waits for a mentor or reviewer to approve it. Rooms can require approval for all agent work.
-- **Exactly once.** Submits are idempotent and two-step: `saved` (verified), then `completed` (applied). A crash between the two is finished once on retry with the same key.
-- **Evidence.** Every action is written to an append-only event log with a per-room sequence number. The Timeline, Trace and Recovery views are built from it.
-
-## Connecting an agent
-
-In the UI, open **Members & Agents → Connect an agent**. Pick a tool and a role, copy the token (it's shown only once), and paste the snippet. For the demo, `./start.sh` also writes ready-made folders to `.baton/agents/`. Templates are in [agent-configs/](agent-configs/).
-
-**Claude Code**
-```bash
-claude mcp add --transport http baton http://localhost:8000/mcp --header "Authorization: Bearer <BATON_TOKEN>"
-```
-
-**Codex** (`~/.codex/config.toml`)
-```toml
-[mcp_servers.baton]
-url = "http://localhost:8000/mcp"
-bearer_token_env_var = "BATON_TOKEN"
-default_tools_approval_mode = "approve"
-```
-Then run `export BATON_TOKEN=<BATON_TOKEN>` in the shell that runs `codex`.
-
-**Gemini CLI** (`~/.gemini/settings.json`)
-```json
-{ "mcpServers": { "baton": { "httpUrl": "http://localhost:8000/mcp", "headers": { "Authorization": "Bearer <BATON_TOKEN>" } } } }
-```
-
-Also paste [agent-configs/AGENT_INSTRUCTIONS.md](agent-configs/AGENT_INSTRUCTIONS.md) into the project's `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`. Every agent gets the same nine tools: `get_room_context`, `list_tasks`, `read_record`, `claim_task`, `heartbeat`, `submit_result`, `release_task`, `add_source` and `comment`.
-
-## The six judging tests
-
-| # | Test | How Baton passes it |
-|---|---|---|
-| 1 | Connect two different tools | Claude Code and Codex (and Gemini CLI) use the same MCP tools by URL and token. Verified with the real CLIs. |
-| 2 | Keep one team record | Versioned brief, decisions and sources. Agent-role and member-role permissions are enforced on every call. |
-| 3 | Demonstrate a handoff | Codex's `claim_task` returns Claude's draft, its `based_on` revisions and sources. No chat is copied. |
-| 4 | Handle a changed decision | Preview, stale flags (direct and indirect), rejected stale submits, redo, human approval. Independent work is kept. |
-| 5 | Recover after interruption | `crash_demo.py`: saved → crash → resume with the same key → applied exactly once, counted from the database |
-| 6 | Show the evidence | Event log (who, when, which revision) and a trace graph from a corrected output to the decision and teammate behind it |
-
-The step-by-step presentation is in [docs/DEMO.md](docs/DEMO.md).
+- **One shared record.** Briefs, decisions, sources, tasks, drafts and reviews. Nothing is overwritten: every edit is a new revision.
+- **Claims.** An agent claims a task for 15 minutes; nobody else can work on it, and an abandoned claim expires.
+- **Three checks** on every submission:
+  1. *Holds the claim*: only the claiming agent can submit.
+  2. *Based on current revisions*: work built on an outdated decision is rejected with `stale: based on Decision 2 v1, now v2`.
+  3. *Content complete*: the output has the fields its type needs, and every cited source exists.
+- **Stale flags.** Change a decision and only the work built on it turns amber. Independent work stays green. A preview shows the impact before you save, and corrected work waits for your approval.
+- **Exactly once.** A retried submission is never applied twice, even after a crash.
+- **Evidence.** Every step is logged with who did it, when and from which revisions (Timeline, Trace, Recovery).
 
 ## Repository
 
 | Path | What |
 |---|---|
-| `backend/` | FastAPI app: REST API, WebSocket, MCP server (`app/mcp_server.py`), services, Alembic migrations, tests |
-| `frontend/` | Web UI, built separately (see `docs/UI_SPEC.md`) |
-| `docs/API_CONTRACT.md` | The REST + WebSocket contract the frontend builds against |
-| `docs/UI_SPEC.md` | Screens and layout |
-| `docs/ARCHITECTURE.md` | Design decisions and build plan |
-| `docs/DEMO.md` | The 3-minute demo script |
-| `scripts/` | `seed_demo.py`, `crash_demo.py`, `demo_run.py` |
-| `agent-configs/` | Agent config templates, instructions, and commands for running agents without a chat window |
+| `desktop/` | The Electron app: starts the backend and shows the UI |
+| `backend/` | FastAPI app: REST API, WebSocket, MCP server, AI providers, agent runner, tests |
+| `frontend/` | React + Vite + Tailwind interface |
+| `agent-configs/` | MCP config templates for tools that connect themselves |
+| `docs/` | `API_CONTRACT.md`, `UI_SPEC.md`, `ARCHITECTURE.md` |
 
-## Development
-
-The backend source is mounted into the container, so after a code change run `docker compose restart backend`.
-
-Run the tests inside the container. They use a separate `baton_test` database in the same Postgres:
+## Develop
 
 ```bash
-docker compose exec backend pytest -q
+cd backend && uv run --python 3.12 --extra dev pytest -q      # 85 tests, no network needed
+cd backend && BATON_LOCAL_MODE=1 BATON_STATIC_DIR=../frontend/dist uv run --python 3.12 uvicorn app.main:app --port 8765
+cd frontend && npm run dev                                     # UI with hot reload against a backend on :8000
 ```
 
-Schema changes go through Alembic:
-
-```bash
-docker compose exec backend alembic revision --autogenerate -m "..."
-```
-
-Then review the generated migration and restart the backend, which runs `alembic upgrade head` on start.
+Settings come from environment variables (see `.env.example`).

@@ -1,6 +1,6 @@
 export type Role = 'owner' | 'mentor' | 'member';
 export type AgentRole = 'planner' | 'reviewer' | 'observer';
-export type ToolType = 'claude_code' | 'codex' | 'gemini_cli' | 'cursor' | 'other';
+export type ToolType = 'claude_code' | 'codex' | 'gemini_cli' | 'cursor' | 'antigravity' | 'other';
 export type RecordType = 'brief' | 'decision' | 'task' | 'source' | 'draft' | 'review';
 export type Status = 'approved' | 'stale' | 'rejected' | 'claimed' | 'in_review' | 'open';
 
@@ -78,6 +78,9 @@ export interface Agent {
   tool: ToolType;
   role: AgentRole;
   color: string;
+  provider?: string | null;
+  model?: string | null;
+  runnable?: boolean;
   online: boolean;
   last_seen_at: string;
   working_on: AgentWorkingOn | null;
@@ -320,4 +323,36 @@ export interface AgentConfigResponse {
   env: { [key: string]: string };
   snippets: { [key: string]: string };
   instructions_md: string;
+}
+
+export interface ProviderInfo {
+  id: string;
+  label: string;
+  kind: 'api' | 'offline' | 'mcp';
+  needs_key: boolean;
+  help: string;
+  default_model: string;
+  model: string;
+  has_key: boolean;
+  key_hint: string | null;
+  key_source: string | null;
+  ready: boolean;
+  models: string[];
+}
+
+export interface ConnectTool {
+  id: string;
+  label: string;
+  kind: string;
+  help: string;
+}
+
+export interface RunStatus {
+  run_id: string;
+  status: 'running' | 'done' | 'rejected' | 'failed';
+  agent?: string;
+  task?: string;
+  message?: string;
+  steps?: Array<{ task: string; agent?: string; status: string; message?: string }>;
+  seconds?: number;
 }

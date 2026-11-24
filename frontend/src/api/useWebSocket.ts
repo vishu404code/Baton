@@ -83,7 +83,7 @@ export function useRoomWebSocket(roomId: string | null): WebSocketHookResult {
       return () => clearInterval(mockInterval);
     }
 
-    const rawBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const rawBaseUrl = api.getBaseUrl();
     const wsBaseUrl = rawBaseUrl.replace(/^http/, 'ws');
     const wsUrl = `${wsBaseUrl}/ws/rooms/${roomId}?token=${encodeURIComponent(
       token || ''

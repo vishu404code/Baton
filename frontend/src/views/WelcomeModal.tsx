@@ -8,7 +8,7 @@ interface WelcomeModalProps {
 
 export const WelcomeModal: React.FC<WelcomeModalProps> = ({ onSignedIn }) => {
   const [displayName, setDisplayName] = useState('');
-  const [inviteCode, setInviteCode] = useState('CAMPUS-7KQ2');
+  const [inviteCode, setInviteCode] = useState('');
   const [roomName, setRoomName] = useState('Campus App Launch');
   const [mode, setMode] = useState<'welcome' | 'join' | 'create'>('welcome');
   const [loading, setLoading] = useState(false);
@@ -170,7 +170,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ onSignedIn }) => {
               </label>
               <input
                 type="text"
-                placeholder="CAMPUS-7KQ2"
+                placeholder="e.g. MY-4K7Q"
                 value={inviteCode}
                 onChange={(e) => setInviteCode(e.target.value)}
                 className="w-full px-3 py-2 bg-[#111217] border border-[#2A2D37] rounded-lg text-[#E6E7EB] font-mono text-sm uppercase tracking-wider focus:outline-none focus:border-[#6366F1]"

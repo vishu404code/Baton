@@ -39,7 +39,9 @@ export const MembersView: React.FC<MembersViewProps> = ({
   const [showConfigModal, setShowConfigModal] = useState<AgentConfigResponse | null>(null);
 
   // New agent form
-  const [tool, setTool] = useState<ToolType>('claude_code');
+  // 'api:<provider>' = Baton runs it through that AI's API; 'tool:<name>' = a tool you run yourself (MCP).
+  const [runsOn, setRunsOn] = useState<string>('api:anthropic');
+  const tool: ToolType = runsOn.startsWith('tool:') ? (runsOn.slice(5) as ToolType) : 'other';
   const [agentRole, setAgentRole] = useState<AgentRole>('planner');
   const [agentName, setAgentName] = useState('');
   const [connectStep, setConnectStep] = useState<'form' | 'snippets'>('form');
@@ -120,17 +122,25 @@ export const MembersView: React.FC<MembersViewProps> = ({
     e.preventDefault();
     try {
       setConnectLoading(true);
-      const name = agentName.trim() || `${tool === 'claude_code' ? 'Claude' : 'Codex'}`;
-      const res = await api.createAgent(roomId, {
-        name,
-        tool,
-        role: agentRole,
-      });
+      const isApi = runsOn.startsWith('api:');
+      const provider = isApi ? runsOn.slice(4) : undefined;
+      const labels: Record<string, string> = { anthropic: 'Claude', openai: 'ChatGPT', deepseek: 'DeepSeek', gemini: 'Gemini', mock: 'Demo model' };
+      const name = agentName.trim() || (isApi ? `${labels[provider!] ?? provider} ${agentRole}` : `${tool.replace('_', ' ')} ${agentRole}`);
+      const res = await api.createAgent(roomId, isApi ? { name, role: agentRole, provider } : { name, tool, role: agentRole });
 
+      queryClient.invalidateQueries({ queryKey: ['agents', roomId] });
+      if (isApi) {
+        // Baton runs this agent itself: nothing to paste anywhere.
+        setShowConnectModal(false);
+        setAgentName('');
+        if (res.agent.runnable === false) {
+          alert(`${name} is created, but ${labels[provider!]} has no API key yet. Add it in AI Models, then press Run on a task.`);
+        }
+        return;
+      }
       setCreatedAgentData(res);
       setActiveSnippetTab(tool);
       setConnectStep('snippets');
-      queryClient.invalidateQueries({ queryKey: ['agents', roomId] });
     } catch (e: any) {
       alert(e.message || 'Failed to create agent');
     } finally {
@@ -311,7 +321,14 @@ export const MembersView: React.FC<MembersViewProps> = ({
                     </td>
 
                     <td className="py-3.5 px-4 font-mono text-[11px] text-[#8B8FA3] uppercase">
-                      {agt.tool.replace('_', ' ')}
+                      {agt.provider ? (
+                        <span title={agt.runnable ? 'Ready to run' : 'No API key yet. Add it in AI Models'}>
+                          {agt.provider} · {agt.model}
+                          {!agt.runnable && <span className="text-[#F59E0B] normal-case"> · needs key</span>}
+                        </span>
+                      ) : (
+                        agt.tool.replace('_', ' ')
+                      )}
                     </td>
 
                     <td className="py-3.5 px-4 font-mono text-[11px] capitalize text-[#E6E7EB]">
@@ -380,18 +397,28 @@ export const MembersView: React.FC<MembersViewProps> = ({
               <form onSubmit={handleCreateAgent} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-[#8B8FA3] mb-1">
-                    AI Coding Tool
+                    Which AI?
                   </label>
                   <select
-                    value={tool}
-                    onChange={(e) => setTool(e.target.value as ToolType)}
+                    value={runsOn}
+                    onChange={(e) => setRunsOn(e.target.value)}
                     className="w-full px-3 py-2 bg-[#111217] border border-[#2A2D37] rounded-lg text-[#E6E7EB] text-xs focus:outline-none focus:border-[#6366F1]"
                   >
-                    <option value="claude_code">Claude Code (Anthropic)</option>
-                    <option value="codex">Codex (OpenAI / ChatGPT)</option>
-                    <option value="gemini_cli">Gemini CLI (Google)</option>
-                    <option value="cursor">Cursor</option>
-                    <option value="other">Other MCP Client</option>
+                    <optgroup label="Baton runs it for you (needs an API key in AI Models)">
+                      <option value="api:anthropic">Claude (Anthropic)</option>
+                      <option value="api:openai">ChatGPT (OpenAI)</option>
+                      <option value="api:deepseek">DeepSeek</option>
+                      <option value="api:gemini">Gemini (Google)</option>
+                      <option value="api:mock">Demo model (offline, no key)</option>
+                    </optgroup>
+                    <optgroup label="A tool you run yourself (connects over MCP)">
+                      <option value="tool:antigravity">Antigravity</option>
+                      <option value="tool:claude_code">Claude Code (CLI)</option>
+                      <option value="tool:codex">Codex (CLI)</option>
+                      <option value="tool:gemini_cli">Gemini CLI</option>
+                      <option value="tool:cursor">Cursor</option>
+                      <option value="tool:other">Other MCP client</option>
+                    </optgroup>
                   </select>
                 </div>
 
@@ -401,7 +428,7 @@ export const MembersView: React.FC<MembersViewProps> = ({
                   </label>
                   <input
                     type="text"
-                    placeholder={`e.g. My ${tool === 'claude_code' ? 'Claude' : 'Codex'}`}
+                    placeholder="e.g. Claude planner"
                     value={agentName}
                     onChange={(e) => setAgentName(e.target.value)}
                     className="w-full px-3 py-2 bg-[#111217] border border-[#2A2D37] rounded-lg text-[#E6E7EB] text-xs focus:outline-none focus:border-[#6366F1]"
@@ -540,7 +567,7 @@ export const MembersView: React.FC<MembersViewProps> = ({
                               {
                                 mcpServers: {
                                   baton: {
-                                    url: 'http://localhost:8000/mcp',
+                                    url: `${api.getBaseUrl()}/mcp`,
                                     headers: {
                                       Authorization: `Bearer ${
                                         createdAgentData?.token || '<BATON_TOKEN>'
@@ -571,7 +598,7 @@ export const MembersView: React.FC<MembersViewProps> = ({
                           {
                             mcpServers: {
                               baton: {
-                                url: 'http://localhost:8000/mcp',
+                                url: `${api.getBaseUrl()}/mcp`,
                                 headers: {
                                   Authorization: `Bearer ${
                                     createdAgentData?.token || '<BATON_TOKEN>'

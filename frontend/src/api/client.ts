@@ -15,11 +15,17 @@ import {
   PresenceResponse,
   StalePreviewResponse,
   AgentConfigResponse,
+  ProviderInfo,
+  ConnectTool,
+  RunStatus,
 } from './types';
 import * as mockData from '../mocks/mockData';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Desktop build: VITE_API_URL is empty, so the UI talks to the server it was loaded from (same origin).
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 export const IS_MOCK_ENV = import.meta.env.VITE_MOCK === 'true';
+// Mock data is for UI work without a backend only. Never show invented data in the real app.
+const ALLOW_MOCK = IS_MOCK_ENV || import.meta.env.VITE_ALLOW_MOCK === 'true';
 
 // --- Response adapters -------------------------------------------------------------------------
 // The UI types in ./types.ts were drafted before the backend existed. These functions map Baton's
@@ -33,6 +39,7 @@ const snippetText = (key: string, s: any): string => {
   }
   if (key === 'codex') return [s.config_toml, s.env].filter(Boolean).join('\n\n');
   if (key === 'gemini_cli') return s.settings_json || '';
+  if (key === 'antigravity') return s.mcp_config_json || '';
   return JSON.stringify(s, null, 2);
 };
 
@@ -116,7 +123,12 @@ class ApiClient {
     return this.isMockMode;
   }
 
+  getBaseUrl(): string {
+    return BASE_URL || window.location.origin;
+  }
+
   setMockMode(mock: boolean) {
+    if (mock && !ALLOW_MOCK) mock = false;
     this.isMockMode = mock;
     this.onMockModeChanged?.(mock);
   }
@@ -184,6 +196,7 @@ class ApiClient {
     } catch (err: any) {
       // If network failed completely and not just 4xx/5xx from server, fallback to mock mode
       if (err.name === 'TypeError' || err.message.includes('fetch') || err.message.includes('Failed to fetch')) {
+        if (!ALLOW_MOCK) throw new Error("Can't reach Baton. Is the app still running?");
         console.warn('Backend unreachable, falling back to mock mode:', err.message);
         this.setMockMode(true);
         return this.handleMockRequest<T>(endpoint, options);
@@ -202,7 +215,8 @@ class ApiClient {
       });
       this.setToken(res.token);
       return res;
-    } catch {
+    } catch (e) {
+      if (!ALLOW_MOCK) throw e;
       // Fallback
       const res = {
         user: { id: `usr_${Date.now()}`, display_name, created_at: new Date().toISOString() },
@@ -221,13 +235,27 @@ class ApiClient {
       });
       this.setToken(res.token);
       return res;
-    } catch {
+    } catch (e) {
+      if (!ALLOW_MOCK) throw e;
       const res = {
         user: { ...mockData.MOCK_USER, display_name },
         token: `bs_mock_${display_name.toLowerCase()}`,
       };
       this.setToken(res.token);
       return res;
+    }
+  }
+
+  /** Desktop mode: sign in as the single local owner. Resolves to null when local mode is off. */
+  async localSession(): Promise<{ user: User; token: string; room_id: string } | null> {
+    try {
+      const res = await this.request<{ user: User; token: string; room_id: string }>('/api/session/local', {
+        method: 'POST',
+      });
+      this.setToken(res.token);
+      return res;
+    } catch {
+      return null;
     }
   }
 
@@ -292,7 +320,7 @@ class ApiClient {
 
   async createAgent(
     roomId: string,
-    payload: { name: string; tool: string; role: string }
+    payload: { name: string; tool?: string; role: string; provider?: string; model?: string }
   ): Promise<{ agent: Agent; token: string; config: AgentConfigResponse }> {
     const res = await this.request<{ agent: Agent; token: string; config: AgentConfigResponse }>(
       `/api/rooms/${roomId}/agents`,
@@ -443,6 +471,35 @@ class ApiClient {
   async getRecovery(roomId: string): Promise<RecoveryResponse> {
     const res = await this.request<any>(`/api/rooms/${roomId}/recovery`);
     return this.isMockMode ? res : adaptRecovery(res);
+  }
+
+  // --- AI models & running agents ---
+
+  async getProviders(): Promise<{ providers: ProviderInfo[]; connect: ConnectTool[] }> {
+    return this.request('/api/providers');
+  }
+
+  async updateProvider(id: string, body: { api_key?: string; model?: string }): Promise<ProviderInfo> {
+    return this.request(`/api/providers/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+  }
+
+  async testProvider(id: string): Promise<{ ok: boolean; error?: string; models?: string[]; provider: ProviderInfo }> {
+    return this.request(`/api/providers/${id}/test`, { method: 'POST' });
+  }
+
+  async runTask(roomId: string, taskRef: string, agentId?: string): Promise<{ run_id: string; agent: string; task: string }> {
+    return this.request(`/api/rooms/${roomId}/tasks/${encodeURIComponent(taskRef)}/run`, {
+      method: 'POST',
+      body: JSON.stringify(agentId ? { agent_id: agentId } : {}),
+    });
+  }
+
+  async runOpenTasks(roomId: string): Promise<{ run_id: string }> {
+    return this.request(`/api/rooms/${roomId}/run-open`, { method: 'POST' });
+  }
+
+  async getRun(runId: string): Promise<RunStatus> {
+    return this.request(`/api/runs/${runId}`);
   }
 
   // --- Mock Request Handler ---
