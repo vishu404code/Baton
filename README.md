@@ -25,6 +25,17 @@ cd desktop && npm run pack      # creates desktop/dist/mac-arm64/Baton.app
 
 Your data lives in `~/Library/Application Support/Baton/` (`data/baton.db`, `logs/`). Help → *Open data folder* shows it.
 
+## One roadmap, every AI in sync (the main feature)
+
+Baton is a local hub that keeps Claude, ChatGPT (Codex), Antigravity and Gemini on the same page about one project, on this Mac only.
+
+1. **Roadmap**: make a plan anywhere (ChatGPT, Codex...), paste it in or let Codex save it. Each task has one owner tool, dependencies and a folder.
+2. **Hooks**: Claude Code, Codex and Antigravity run a tiny script (`baton_hook.py`) by themselves on every edit and prompt. It reports the activity to Baton and prints a short briefing back into the tool when something changed. Only work inside your project folder counts.
+3. **Live**: one card per tool showing what it is doing now, plus a feed of everything that happened.
+4. **Setup**: press **Connect all tools**. Then restart each tool once. In Codex, type `/hooks` once and trust the Baton hooks.
+
+Open Claude or Antigravity, say "continue", and it already knows its task and what the others built. The old chat and scripted demos live under **Demo**.
+
 ## Chat with several AIs in one place
 
 On the **Context** screen, pick **Claude, ChatGPT, Gemini or Antigravity** and type a message. No setup: Baton uses the Claude, ChatGPT (Codex) and Antigravity apps already signed in on your computer. An API key under **Tools & keys** is optional and, if added, is used instead (DeepSeek only works with a key). Every AI you ask reads the same shared memory first, so you can ask Claude, then ChatGPT, then Gemini and nobody needs the project explained again. Each answer is saved to the shared memory, so tools such as Claude Code, Codex and Antigravity (connected over MCP) see it too, and the other way round.

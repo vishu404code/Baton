@@ -113,7 +113,94 @@ def connect_claude(url: str, token: str) -> str:
     return "claude mcp add (user scope)"
 
 
-def connect_tool(tool: str, url: str, token: str) -> list[str]:
+HOOK_TOOLS = ("claude_code", "codex", "antigravity")
+HOOK_DIR_REL = "Library/Application Support/Baton/hooks"
+EDIT_MATCH = {"claude_code": "Edit|Write|MultiEdit|NotebookEdit|Bash", "codex": "apply_patch|Bash",
+              "antigravity": "write_to_file|replace_file_content|multi_replace_file_content|run_command"}
+
+
+def hook_script_path() -> Path:
+    return home() / HOOK_DIR_REL / "baton_hook.py"
+
+
+def _hook_cmd(tool: str, event: str) -> str:
+    return f'/usr/bin/python3 "{hook_script_path()}" {tool} {event}'
+
+
+def _load_json(p: Path) -> dict:
+    try:
+        return json.loads(p.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _strip_baton(groups: list) -> list:
+    keep = []
+    for g in groups or []:
+        hooks = [x for x in (g.get("hooks") or []) if "baton_hook.py" not in str(x.get("command", ""))] if isinstance(g, dict) and "hooks" in g else [g]
+        if isinstance(g, dict) and "hooks" in g:
+            if hooks:
+                keep.append({**g, "hooks": hooks})
+        elif "baton_hook.py" not in str(g.get("command", "")):
+            keep.append(g)
+    return keep
+
+
+def _cmd_hook(tool: str, event: str, timeout: int = 5) -> dict:
+    return {"type": "command", "command": _hook_cmd(tool, event), "timeout": timeout}
+
+
+def install_hook(tool: str, token: str, base_url: str, project: str) -> list[str]:
+    """Make the tool report what it does and receive the shared briefing, by itself, through its own hook system."""
+    if tool not in HOOK_TOOLS:
+        return []
+    h = home()
+    script = hook_script_path()
+    script.parent.mkdir(parents=True, exist_ok=True)
+    src = Path(__file__).parent / "data" / "baton_hook.py"
+    script.write_text(src.read_text())
+    script.chmod(0o755)
+    cfg_path = script.parent / "config.json"
+    cfg = _load_json(cfg_path)
+    cfg.update({"url": base_url, "project": project})
+    cfg.setdefault("tokens", {})[tool] = token
+    cfg_path.write_text(json.dumps(cfg, indent=2))
+    os.chmod(cfg_path, 0o600)
+
+    if tool in ("claude_code", "codex"):
+        path = h / (".claude/settings.json" if tool == "claude_code" else ".codex/hooks.json")
+        data = _load_json(path)
+        hooks = data.setdefault("hooks", {})
+        mk = lambda ev, matcher=None: ({"matcher": matcher} if matcher else {}) | {"hooks": [_cmd_hook(tool, ev)]}  # noqa: E731
+        plan = {"SessionStart": mk("SessionStart", "startup|resume" if tool == "codex" else None), "UserPromptSubmit": mk("UserPromptSubmit"),
+                "PostToolUse": mk("PostToolUse", EDIT_MATCH[tool]), "Stop": mk("Stop")}
+        for ev, group in plan.items():
+            hooks[ev] = _strip_baton(hooks.get(ev, [])) + [group]
+        _write(path, json.dumps(data, indent=2))
+        return [("~/.claude/settings.json" if tool == "claude_code" else "~/.codex/hooks.json") + " (hooks)"]
+    path = h / ".gemini" / "config" / "hooks.json"
+    data = _load_json(path)
+    data["baton"] = {
+        "SessionStart": [_cmd_hook(tool, "SessionStart")],
+        "PreInvocation": [_cmd_hook(tool, "PreInvocation")],
+        "PostToolUse": [{"matcher": EDIT_MATCH[tool], "hooks": [_cmd_hook(tool, "PostToolUse")]}],
+        "Stop": [_cmd_hook(tool, "Stop")],
+    }
+    _write(path, json.dumps(data, indent=2))
+    return ["~/.gemini/config/hooks.json (hooks)"]
+
+
+def hooks_installed() -> dict[str, bool]:
+    h = home()
+    def has(p: Path) -> bool:
+        try:
+            return "baton_hook.py" in p.read_text()
+        except OSError:
+            return False
+    return {"claude_code": has(h / ".claude/settings.json"), "codex": has(h / ".codex/hooks.json"), "antigravity": has(h / ".gemini/config/hooks.json")}
+
+
+def connect_tool(tool: str, url: str, token: str, project: str | None = None) -> list[str]:
     """Write the config + instructions for one tool. Returns what was changed."""
     h, done = home(), []
     if tool == "claude_code":
@@ -134,10 +221,12 @@ def connect_tool(tool: str, url: str, token: str) -> list[str]:
         done += ["~/.gemini/config/mcp_config.json", "~/.gemini/GEMINI.md"]
     else:
         raise ValueError(f"unknown tool {tool}")
+    if project and tool in HOOK_TOOLS:
+        done += install_hook(tool, token, url.rsplit("/mcp", 1)[0], project)
     return done
 
 
-def connect_all(db, room, owner, url: str, tools: list[str] | None = None) -> dict[str, dict]:
+def connect_all(db, room, owner, url: str, tools: list[str] | None = None, project: str | None = None) -> dict[str, dict]:
     """Create fresh agents + tokens in `room` and wire every tool. One failing tool never blocks the others."""
     results: dict[str, dict] = {}
     for tool in tools or list(TOOLS):
@@ -147,7 +236,7 @@ def connect_all(db, room, owner, url: str, tools: list[str] | None = None) -> di
         agent, token = room_svc.create_agent(db, room, owner, meta["agent"], tool, "planner")
         db.commit()
         try:
-            results[tool] = {"ok": True, "changed": connect_tool(tool, url, token), "agent": agent.name}
+            results[tool] = {"ok": True, "changed": connect_tool(tool, url, token, project), "agent": agent.name}
         except Exception as e:  # noqa: BLE001
             results[tool] = {"ok": False, "error": str(e), "agent": agent.name}
     return results
@@ -163,7 +252,8 @@ def main() -> int:
     init_db()
     with SessionLocal() as db:
         owner, room = bootstrap.ensure_local_workspace(db)
-        res = connect_all(db, room, owner, url)
+        project = sys.argv[sys.argv.index("--project") + 1] if "--project" in sys.argv else str(Path.home() / "Desktop" / "baton")
+        res = connect_all(db, room, owner, url, project=project)
     for tool, r in res.items():
         print(("OK   " if r["ok"] else "FAIL ") + TOOLS[tool]["label"] + ": " + (", ".join(r["changed"]) if r["ok"] else r["error"]))
     return 0 if all(r["ok"] for r in res.values()) else 1

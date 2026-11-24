@@ -20,6 +20,9 @@ import { Room, Role } from '../../api/types';
 import { applyTheme, getTheme, Theme } from '../../lib/theme';
 
 export type ActiveView =
+  | 'roadmap'
+  | 'live'
+  | 'setup'
   | 'board'
   | 'timeline'
   | 'decisions'
@@ -70,10 +73,10 @@ export const RoomSidebar: React.FC<RoomSidebarProps> = ({
     badge?: number;
     badgeColor?: string;
   }> = [
-    { id: 'context', label: 'Context', icon: <Layers className="w-4 h-4" /> },
-    { id: 'board', label: 'Tasks', icon: <LayoutGrid className="w-4 h-4" />, badge: room?.counts?.stale ? room.counts.stale : undefined, badgeColor: 'bg-[#F59E0B] text-black font-semibold' },
-    { id: 'decisions', label: 'Project', icon: <GitBranch className="w-4 h-4" /> },
-    { id: 'models', label: 'Tools & keys', icon: <Cpu className="w-4 h-4" /> },
+    { id: 'roadmap', label: 'Roadmap', icon: <GitBranch className="w-4 h-4" /> },
+    { id: 'live', label: 'Live', icon: <History className="w-4 h-4" /> },
+    { id: 'setup', label: 'Setup', icon: <Cpu className="w-4 h-4" /> },
+    { id: 'context', label: 'Demo', icon: <Layers className="w-4 h-4" /> },
   ];
 
   return (

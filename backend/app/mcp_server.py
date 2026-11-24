@@ -340,6 +340,59 @@ async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> dict:
     return await _run(ctx, _search_knowledge, query, limit)
 
 
+def _save_roadmap(db: Session, agent: Agent, tasks: list[dict], replace: bool) -> dict:
+    from app.services import roadmap as rm
+
+    room = db.get(Room, agent.room_id)
+    owner = db.get(User, agent.user_id).display_name
+    try:
+        rows = rm.save_roadmap(db, room, tasks, replace=replace, actor=actor_agent(agent, owner))
+    except rm.RoadmapError as e:
+        raise AgentError("bad_request", str(e)) from None
+    return {"saved": len(rows), "roadmap": rm.roadmap_lines(rows)}
+
+
+def _get_roadmap(db: Session, agent: Agent) -> dict:
+    from app.services import roadmap as rm
+
+    rows = rm.list_tasks(db, agent.room_id)
+    mine = rm.next_task_for(rows, agent.tool)
+    return {"roadmap": rm.roadmap_lines(rows, agent.tool), "your_next_task": rm.task_out(mine) if mine else None}
+
+
+def _update_task(db: Session, agent: Agent, number: int, status: str | None, note: str | None) -> dict:
+    from app.services import roadmap as rm
+
+    room = db.get(Room, agent.room_id)
+    owner = db.get(User, agent.user_id).display_name
+    try:
+        t = rm.update_task(db, room, number, status=status, note=note, owner=None, actor=actor_agent(agent, owner))
+    except rm.RoadmapError as e:
+        raise AgentError("bad_request", str(e)) from None
+    return rm.task_out(t)
+
+
+@server.tool()
+async def save_roadmap(ctx: Context, tasks: list[dict], replace: bool = False) -> dict:
+    """Save the project roadmap so every AI tool on this Mac sees it. tasks: a list of {title, owner, description, done_when,
+    depends_on (task numbers), area (folder like backend/)}. owner is one of claude, chatgpt, antigravity, gemini. Use replace=true
+    for a brand-new roadmap. Tasks are numbered 1, 2, 3 in the order given."""
+    return await _run(ctx, _save_roadmap, tasks, replace)
+
+
+@server.tool()
+async def get_roadmap(ctx: Context) -> dict:
+    """The shared roadmap with each task's owner and status, plus the next task that is yours."""
+    return await _run(ctx, _get_roadmap)
+
+
+@server.tool()
+async def update_task(ctx: Context, number: int, status: str | None = None, note: str | None = None) -> dict:
+    """Update a roadmap task: status is waiting | in_progress | done | blocked. note: one line others should know (for example the
+    API endpoints you built). Call it with 'done' when your task is finished."""
+    return await _run(ctx, _update_task, number, status, note)
+
+
 @server.tool()
 async def save_context(ctx: Context, summary: str, next_steps: str | None = None, files: list[str] | None = None, kind: str = "progress") -> dict:
     """Record what you just did so the next AI tool can continue from exactly here. Call it when you finish a

@@ -10,7 +10,9 @@ MCP_INSTRUCTIONS = (
     "to another tool, call save_context(summary, next_steps, files) so the next tool can pick up exactly where you stopped. "
     "3) When the user asks about the subject matter stored in Baton (for example a website's articles, places and itineraries), "
     "call search_knowledge(query) first and answer from what it returns; never claim you cannot access that content. "
-    "4) For structured work use tasks: list_tasks, claim_task, then submit_result with the exact revision_id of everything "
+    "4) The project has a shared roadmap with one owner per task: call get_roadmap to see your task, work on it, and call "
+    "update_task(number, 'done', note) when it is finished (note: one line the other tools need, such as the endpoints you built). "
+    "5) For structured work use tasks: list_tasks, claim_task, then submit_result with the exact revision_id of everything "
     "you used in based_on, and reuse the same idempotency_key when retrying. If a submit is rejected as stale, read_record "
     "the record named in the error and resubmit with a NEW idempotency_key."
 )
@@ -23,5 +25,6 @@ Baton (MCP server `baton`) keeps one shared record of this project for every AI 
 2. **When you finish a chunk of work, make a decision, or I say I'm switching tools, call `save_context`** with a short `summary`, the `next_steps`, and the `files` you touched. The next tool reads this.
 3. Respect the decisions listed in the handoff; they are binding. If you must change one, say so and save it with `kind="decision"`.
 4. **Before answering questions about the subject matter stored in Baton** (for example a website's articles, places and itineraries), call `search_knowledge` and answer from what it returns. Never say you can't access that content.
-5. For task-style work: `list_tasks` → `claim_task` → `submit_result` (put every revision_id you used in `based_on`; reuse the same `idempotency_key` on retries; if rejected as stale, `read_record` and resubmit with a new key).
+5. **Roadmap:** call `get_roadmap` to see which task is yours (each task has one owner tool). When you finish it, call `update_task(number, "done", note)` with one line the other tools need (for example the endpoints you built). Do your own task unless I say otherwise.
+6. For task-style work: `list_tasks` → `claim_task` → `submit_result` (put every revision_id you used in `based_on`; reuse the same `idempotency_key` on retries; if rejected as stale, `read_record` and resubmit with a new key).
 """

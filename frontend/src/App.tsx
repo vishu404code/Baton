@@ -15,6 +15,9 @@ import { MembersView } from './views/MembersView';
 import { SettingsView } from './views/SettingsView';
 import { ModelsView } from './views/ModelsView';
 import { ContextView } from './views/ContextView';
+import { RoadmapView } from './views/RoadmapView';
+import { LiveView } from './views/LiveView';
+import { SetupView } from './views/SetupView';
 import { api } from './api/client';
 import { useRoomWebSocket } from './api/useWebSocket';
 import { Room, Member, Agent, Event } from './api/types';
@@ -32,7 +35,7 @@ function BatonApp() {
   const qc = useQueryClient();
   const [currentUser, setCurrentUser] = useState<{ id: string; display_name: string } | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<ActiveView>('context');
+  const [activeView, setActiveView] = useState<ActiveView>('roadmap');
   const [isMockMode, setIsMockMode] = useState<boolean>(api.getIsMockMode());
   const [manualStaleAlert, setManualStaleAlert] = useState<{ message: string; count: number } | null>(null);
 
@@ -196,6 +199,9 @@ function BatonApp() {
         {/* View Switcher */}
         {selectedRoomId ? (
           <>
+            {activeView === 'roadmap' && <RoadmapView roomId={selectedRoomId} />}
+            {activeView === 'live' && <LiveView roomId={selectedRoomId} />}
+            {activeView === 'setup' && <SetupView roomId={selectedRoomId} />}
             {activeView === 'board' && (
               <BoardView
                 roomId={selectedRoomId}
@@ -232,7 +238,7 @@ function BatonApp() {
             {activeView === 'context' && selectedRoomId && <ContextView
                 roomId={selectedRoomId}
                 demoRoomId={rooms.find((r) => r.name.startsWith('Live demo'))?.id}
-                onOpenKeys={() => setActiveView('models')}
+                onOpenKeys={() => setActiveView('setup')}
                 onOpenDemo={() => setSelectedRoomId(rooms.find((r) => r.name.startsWith('Live demo'))!.id)}
               />}
             {activeView === 'models' && <ModelsView roomId={selectedRoomId} />}
@@ -251,7 +257,7 @@ function BatonApp() {
       </main>
 
       {/* 4. Right Panel (300px collapsible) */}
-      {activeView !== 'context' && activeView !== 'board' && activeView !== 'models' && (
+      {!['context', 'board', 'models', 'roadmap', 'live', 'setup'].includes(activeView) && (
         <RightPanel
           members={members}
           agents={agents}

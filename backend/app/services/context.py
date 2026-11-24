@@ -53,7 +53,11 @@ def build_handoff(db, room: Room, *, for_name: str | None = None) -> dict:
     brief = ledger.latest(db, room.id, "brief")
     lines += ["", "## Goal", _snip(cur(brief).get("body", ""), 900) if brief else "(no brief written yet)"]
     from app.services import knowledge as kn
+    from app.services import roadmap as rm
 
+    rtasks = rm.list_tasks(db, room.id)
+    if rtasks:
+        lines += ["", "## Roadmap (shared by every AI tool)"] + rm.roadmap_lines(rtasks)
     kidx = kn.index_markdown(db)
     if kidx:
         lines += ["", "## Knowledge base", "Reference material about the subject is stored in Baton. Call search_knowledge(query) for the full text before answering questions about it.", kidx]

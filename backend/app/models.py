@@ -312,3 +312,23 @@ class KnowledgeDoc(Base):
     tags: Mapped[str] = mapped_column(String(400), default="")
     text: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = _ts()
+
+
+class RoadmapTask(Base):
+    """One step of the project roadmap, owned by one AI tool (research in GPT, backend in Claude, frontend in Antigravity...)."""
+
+    __tablename__ = "roadmap_tasks"
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    room_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"), index=True)
+    number: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(200))
+    owner_tool: Mapped[str] = mapped_column(String(24))  # claude_code | codex | antigravity | gemini_cli
+    description: Mapped[str] = mapped_column(Text, default="")
+    done_when: Mapped[str] = mapped_column(Text, default="")
+    depends_on: Mapped[list] = mapped_column(JSON, default=list)  # task numbers
+    area: Mapped[str] = mapped_column(String(200), default="")  # folder this task works in, e.g. backend/
+    status: Mapped[str] = mapped_column(String(16), default="waiting")  # waiting | in_progress | done | blocked
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = _ts()
+    __table_args__ = (UniqueConstraint("room_id", "number", name="uq_roadmap_room_number"),)

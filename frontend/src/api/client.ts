@@ -480,6 +480,38 @@ class ApiClient {
     return this.request(`/api/rooms/${roomId}/context`);
   }
 
+  async getRoadmap(roomId: string): Promise<{ tasks: any[] }> {
+    return this.request(`/api/rooms/${roomId}/roadmap`);
+  }
+
+  async saveRoadmap(roomId: string, tasks: any[], replace: boolean): Promise<{ tasks: any[] }> {
+    return this.request(`/api/rooms/${roomId}/roadmap`, { method: 'POST', body: JSON.stringify({ tasks, replace }) });
+  }
+
+  async patchRoadmapTask(roomId: string, number: number, patch: { status?: string; note?: string; owner?: string }): Promise<any> {
+    return this.request(`/api/rooms/${roomId}/roadmap/${number}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  }
+
+  async deleteRoadmapTask(roomId: string, number: number): Promise<void> {
+    await this.request(`/api/rooms/${roomId}/roadmap/${number}`, { method: 'DELETE' });
+  }
+
+  async importRoadmap(roomId: string, text: string): Promise<{ tasks: any[]; read_by: string }> {
+    return this.request(`/api/rooms/${roomId}/roadmap/import`, { method: 'POST', body: JSON.stringify({ text }) });
+  }
+
+  async getActivity(roomId: string): Promise<any> {
+    return this.request(`/api/rooms/${roomId}/activity?limit=40`);
+  }
+
+  async getHooksStatus(): Promise<any> {
+    return this.request('/api/hooks/status');
+  }
+
+  async installHooks(project_dir: string): Promise<any> {
+    return this.request('/api/hooks/install', { method: 'POST', body: JSON.stringify({ project_dir }) });
+  }
+
   async getKnowledge(): Promise<any> {
     return this.request('/api/knowledge');
   }

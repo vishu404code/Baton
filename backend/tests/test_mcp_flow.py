@@ -50,7 +50,7 @@ def test_tool_list_and_instructions(world, live_server):
     names, instructions = anyio.run(go)
     assert names == sorted([
         "get_room_context", "list_tasks", "read_record", "claim_task", "heartbeat",
-        "submit_result", "release_task", "add_source", "comment", "get_handoff", "save_context", "search_knowledge",
+        "submit_result", "release_task", "add_source", "comment", "get_handoff", "save_context", "search_knowledge", "save_roadmap", "get_roadmap", "update_task",
     ])
     assert "get_handoff" in (instructions or "") and "save_context" in (instructions or "")
 
