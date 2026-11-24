@@ -1,0 +1,16 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.DS_Store
+.baton/
+frontend/node_modules/
+frontend/dist/
+
+# Original build brief (kept local)
+1-CLAUDE-CODE-BACKEND-PROMPT.md
+# v2 SQLite database files
+data/

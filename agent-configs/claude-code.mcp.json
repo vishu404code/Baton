@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "baton": {
+      "type": "http",
+      "url": "<BATON_URL>",
+      "headers": { "Authorization": "Bearer <BATON_TOKEN>" }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+# Append to ~/.codex/config.toml, then: export BATON_TOKEN=<BATON_TOKEN>
+[mcp_servers.baton]
+url = "<BATON_URL>"
+bearer_token_env_var = "BATON_TOKEN"
+# Let Codex call Baton's tools without a prompt (needed for `codex exec`).
+default_tools_approval_mode = "approve"
