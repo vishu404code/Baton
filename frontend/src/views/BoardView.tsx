@@ -259,7 +259,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ roomId, myRole }) => {
             </p>
           </div>
         ) : (
-          <div className="border border-[#2A2D37] rounded-xl overflow-hidden bg-[#111217]/60 shadow-sm">
+          <div className="border border-[#2A2D37] rounded-xl overflow-x-auto bg-[#111217]/60 shadow-sm">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-[#2A2D37] bg-[#16171D] text-[11px] font-semibold uppercase tracking-wider text-[#8B8FA3]">

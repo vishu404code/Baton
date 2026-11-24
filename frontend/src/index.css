@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Gloock&family=Hanken+Grotesk:wght@400;500;600;700&display=swap');
+@import './theme.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -49,11 +51,3 @@ body {
   animation: pulse-amber 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* ---- Light mode ----------------------------------------------------------------------------
-   The interface is designed dark. Light mode inverts lightness and rotates the hue back, so every
-   accent colour keeps its meaning (amber = stale, green = approved, ...). Media stays untouched. */
-html { transition: background-color 0.2s ease; }
-html.light { filter: invert(1) hue-rotate(180deg); background: #ffffff; }
-html.light img, html.light video, html.light canvas, html.light svg image { filter: invert(1) hue-rotate(180deg); }
-html.light ::selection { background: rgba(99, 102, 241, 0.35); }
-body { -webkit-font-smoothing: antialiased; }

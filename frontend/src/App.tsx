@@ -246,12 +246,14 @@ function BatonApp() {
       </main>
 
       {/* 4. Right Panel (300px collapsible) */}
-      <RightPanel
-        members={members}
-        agents={agents}
-        events={uniqueEvents}
-        wsStatus={wsStatus}
-      />
+      {activeView !== 'context' && activeView !== 'board' && activeView !== 'models' && (
+        <RightPanel
+          members={members}
+          agents={agents}
+          events={uniqueEvents}
+          wsStatus={wsStatus}
+        />
+      )}
     </div>
   );
 }
