@@ -1,6 +1,6 @@
 {
   "name": "baton-desktop",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Baton: a desktop workspace where several AI models work one project together",
   "main": "main.js",
   "author": "Baton",

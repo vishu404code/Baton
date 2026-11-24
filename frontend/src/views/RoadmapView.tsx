@@ -74,7 +74,7 @@ export const RoadmapView: React.FC<{ roomId: string }> = ({ roomId }) => {
             </ol>
             <button onClick={() => run('example', () => api.saveRoadmap(roomId, EXAMPLE_ROADMAP, true))}
               className="px-4 py-2.5 rounded-xl bg-[#6366F1]/15 border border-[#6366F1]/40 text-[#E6E7EB] text-[13px] font-semibold flex items-center gap-2">
-              {busy === 'example' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-[#818CF8]" />} Load an example roadmap
+              {busy === 'example' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-[#818CF8]" />} Load the login page example
             </button>
           </div>
         )}

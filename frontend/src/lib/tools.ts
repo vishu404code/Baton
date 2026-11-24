@@ -9,10 +9,9 @@ export const toolOf = (id: string) => TOOLS.find((t) => t.id === id);
 export const colorOf = (id: string) => toolOf(id)?.color || '#8B8FA3';
 
 export const EXAMPLE_ROADMAP = [
-  { title: 'Research what visitors want from the app', owner: 'chatgpt', description: 'Summarise who the users are, the 5 must-have features and 3 competitors.', done_when: 'research notes saved in Baton', area: '' },
-  { title: 'Build the backend API', owner: 'claude', description: 'Endpoints for articles, places and itineraries, with a database and tests.', done_when: 'tests pass and the endpoints are listed in the task note', depends_on: [1], area: 'backend/' },
-  { title: 'Build the frontend screens', owner: 'antigravity', description: 'Home, article, map and itinerary screens that call the API.', done_when: 'screens work against the API', depends_on: [2], area: 'frontend/' },
-  { title: 'Review everything and list fixes', owner: 'gemini', description: 'Check that frontend and backend agree and note any bugs.', done_when: 'review notes saved', depends_on: [2, 3], area: '' },
+  { title: 'Plan the login page', owner: 'chatgpt', description: 'List only the major info: the fields, the buttons, the checks and the error message. Keep it to a few lines.', done_when: 'the plan is saved in the task note' },
+  { title: 'Build login.html', owner: 'claude', description: 'A simple login.html in the project folder: a form with email and password fields, a Sign in button and a Forgot password link. Plain HTML only, no styling. Link style.css in the head. In the task note, list the ids and classes you used so the CSS can target them.', done_when: 'login.html exists and the ids and classes are in the task note', depends_on: [1] },
+  { title: 'Write style.css', owner: 'antigravity', description: 'Create style.css in the project folder that styles login.html (a centred card, clean fonts, a clear button) using the ids and classes from the task note.', done_when: 'style.css exists and login.html looks good in a browser', depends_on: [2] },
 ];
 
 export function ago(iso?: string | null): string {
