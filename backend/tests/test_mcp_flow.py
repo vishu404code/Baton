@@ -86,7 +86,7 @@ def test_full_task_and_handoff_over_mcp(world, live_server, client):
         "idempotency_key": "claude-task1-1",
     })
     assert not err and out["status"] == "completed", out
-    assert len(out["checks"]) == 7 and out["result"]["label"] == "Draft 1"
+    assert len(out["checks"]) == 3 and out["result"]["label"] == "Draft 1"
 
     # Retry with the same key: same result, applied once.
     err, again = call(url, ct, "submit_result", {

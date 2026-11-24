@@ -23,15 +23,7 @@ class JoinIn(_In):
     invite_code: str = Field(min_length=1, max_length=32)
 
 
-class ChecksIn(_In):
-    citations_present: bool | None = None
-    sources_exist: bool | None = None
-    content_schema: bool | None = None
-
-
 class SettingsIn(_In):
-    checks: ChecksIn | None = None
-    min_sources: int | None = Field(default=None, ge=0, le=10)
     lease_minutes: int | None = Field(default=None, ge=1, le=120)
     require_approval: bool | None = None
 

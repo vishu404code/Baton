@@ -56,8 +56,6 @@ def test_create_room_makes_owner_and_invite_code(api):
     assert room["my_role"] == "owner"
     assert re.fullmatch(r"CAMPUS-[A-Z2-9]{4}", room["invite_code"])
     assert room["settings"] == {
-        "checks": {"citations_present": True, "sources_exist": True, "content_schema": True},
-        "min_sources": 1,
         "lease_minutes": 15,
         "require_approval": True,
     }
@@ -106,17 +104,16 @@ def test_settings_mentor_only_partial_update(api, client):
     api.join(ben, room["invite_code"])
     url = f"/api/rooms/{room['id']}/settings"
 
-    r = client.patch(url, json={"min_sources": 2}, headers=ben["h"])
+    r = client.patch(url, json={"lease_minutes": 2}, headers=ben["h"])
     assert r.status_code == 403 and r.json()["error"]["code"] == "forbidden"
 
-    r = client.patch(url, json={"checks": {"citations_present": False}, "lease_minutes": 10}, headers=asha["h"])
+    r = client.patch(url, json={"require_approval": False, "lease_minutes": 10}, headers=asha["h"])
     assert r.status_code == 200
     s = r.json()["settings"]
-    assert s["checks"] == {"citations_present": False, "sources_exist": True, "content_schema": True}
-    assert s["lease_minutes"] == 10 and s["min_sources"] == 1
+    assert s["require_approval"] is False and s["lease_minutes"] == 10
 
     ev = client.get(f"/api/rooms/{room['id']}/events?types=room.settings_changed", headers=asha["h"]).json()["events"]
-    assert ev[0]["payload"]["changed"] == ["checks.citations_present", "lease_minutes"]
+    assert ev[0]["payload"]["changed"] == ["lease_minutes", "require_approval"]
 
     assert client.patch(url, json={"lease_minutes": 0}, headers=asha["h"]).status_code == 422
     assert client.patch(url, json={"bogus": 1}, headers=asha["h"]).status_code == 422
@@ -133,7 +130,7 @@ def test_owner_promotes_member_to_mentor(api, client):
     r = client.patch(f"{base}/{ben['id']}", json={"role": "mentor"}, headers=asha["h"])
     assert r.status_code == 200 and r.json()["role"] == "mentor"
     # A mentor can now change settings, but still can't change roles.
-    assert client.patch(f"/api/rooms/{room['id']}/settings", json={"min_sources": 2}, headers=ben["h"]).status_code == 200
+    assert client.patch(f"/api/rooms/{room['id']}/settings", json={"lease_minutes": 2}, headers=ben["h"]).status_code == 200
     assert client.patch(f"{base}/{chen['id']}", json={"role": "mentor"}, headers=ben["h"]).status_code == 403
     # The owner's role is fixed.
     assert client.patch(f"{base}/{asha['id']}", json={"role": "member"}, headers=asha["h"]).status_code == 409

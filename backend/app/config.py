@@ -13,8 +13,7 @@ class Settings(BaseSettings):
     baton_cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     baton_default_lease_minutes: int = 15
-    baton_default_min_sources: int = 1
-    baton_default_require_approval: bool = True
+    baton_default_require_approval: bool = False
     baton_agent_online_seconds: int = 120
     baton_lease_sweep_seconds: int = 10
     # Pause between verification checks so the room can watch them tick (demo polish).

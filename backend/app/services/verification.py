@@ -1,7 +1,11 @@
-"""The verification pipeline: 7 ordered checks, each pass/fail with a human-readable reason.
+"""The verification pipeline: three essential checks, each pass/fail with a human-readable reason.
 
-Runs before anything is applied. Stops at the first failure. Checks 5-7 can be turned
-off in room settings (they are then reported as skipped). Each result is handed to
+  1. claim_valid       the agent holds this task's lease (one worker per task)
+  2. revisions_current everything the work was based on is still current (no stale inputs)
+  3. content_schema    the output has what its type requires, and cited sources really exist
+
+Role permissions are enforced when the task is claimed, so they aren't re-checked here.
+Runs before anything is applied; stops at the first failure. Each result is handed to
 `on_result` as soon as it is known, so callers can stream it live.
 """
 
@@ -14,21 +18,11 @@ from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
 
 from app.models import Agent, Claim, Record, Revision, Room, User
-from app.services.claims import role_problem
 from app.services.events import iso
 from app.services.ledger import content_problems, label, output_of, required_fields, resolve_record, rev_label
 from app.errors import AgentError
 
-CHECKS = [
-    "claim_valid",
-    "permission",
-    "revisions_current",
-    "no_conflicting_edit",
-    "citations_present",
-    "sources_exist",
-    "content_schema",
-]
-OPTIONAL_CHECKS = ("citations_present", "sources_exist", "content_schema")
+CHECKS = ["claim_valid", "revisions_current", "content_schema"]
 
 
 @dataclass
@@ -72,13 +66,6 @@ def _check_claim_valid(c: Context) -> tuple[bool, str]:
         holder = c.db.get(Agent, c.claim.agent_id)
         return False, f"{t} is claimed by {holder.name} until {iso(c.claim.lease_expires_at)}; you can't submit for it."
     return True, f"{c.agent.name} holds the lease on {t} until {iso(c.claim.lease_expires_at)}."
-
-
-def _check_permission(c: Context) -> tuple[bool, str]:
-    problem = role_problem(c.db, c.agent, c.task)
-    if problem:
-        return False, problem
-    return True, f"{c.agent.role} may submit a {c.output_type} for a {c.task_content.get('role')} task."
 
 
 def _resolve_rev(c: Context, rid: str) -> tuple[Revision, Record] | None:
@@ -132,90 +119,37 @@ def _check_revisions_current(c: Context) -> tuple[bool, str]:
     return True, f"All {checked} based_on revision{'s are' if checked != 1 else ' is'} current."
 
 
-def _check_no_conflicting_edit(c: Context) -> tuple[bool, str]:
-    out = c.output
-    if out is None:
-        return True, f"First version of this task's {c.output_type}."
-    c.base_revision_id = out.current_revision_id
-    listed = [r for r in (_resolve_rev(c, b) for b in c.based_on) if r and r[1].id == out.id]
-    current_rev = c.db.get(Revision, out.current_revision_id)
-    author = current_rev.author_agent_id and c.db.get(Agent, current_rev.author_agent_id)
-    by = author.name if author else "a teammate"
-    if listed:
-        base_rev = listed[0][0]
-        if base_rev.id != out.current_revision_id:
-            return False, (
-                f"conflict: {label(out)} changed to v{out.current_revision} by {by} since your base v{base_rev.number}; "
-                f'call read_record("{label(out)}"), merge, and resubmit.'
-            )
-        return True, f"Editing {rev_label(out, base_rev.number)}, which is still current."
-    if c.claim is not None and current_rev.created_at > c.claim.created_at:
-        return False, (
-            f"conflict: {label(out)} was updated to v{out.current_revision} by {by} after you claimed the task; "
-            f'call read_record("{label(out)}") and include its revision_id in based_on.'
-        )
-    return True, f"No other edits to {label(out)} since you claimed the task (current v{out.current_revision})."
-
-
-def _check_citations_present(c: Context) -> tuple[bool, str]:
-    minimum = int(c.room.settings.get("min_sources", 1))
-    if c.output_type != "draft":
-        return True, "Citations are not required for reviews."
-    n = len(c.source_refs)
-    if n < minimum:
-        return False, f"cites {n} source{'s' if n != 1 else ''}, minimum is {minimum}; add sources (add_source) and list their IDs in sources."
-    return True, f"{n} source{'s' if n != 1 else ''} cited (minimum {minimum})."
-
-
-def _check_sources_exist(c: Context) -> tuple[bool, str]:
+def _check_content_schema(c: Context) -> tuple[bool, str]:
+    problems = content_problems(c.output_type, c.content)
+    if problems:
+        return False, f"{c.output_type} content invalid: {'; '.join(problems)}."
     ids = []
     for ref in c.source_refs:
         try:
             rec = resolve_record(c.db, c.room.id, ref)
         except AgentError:
-            return False, f"source {ref} not found in this room; add it with add_source and cite the returned ID."
+            return False, f"cited source {ref} not found in this room; use a source_id from get_room_context or add one with add_source."
         if rec.type != "source":
             return False, f"{label(rec)} is a {rec.type}, not a source; cite source records only."
         ids.append(str(rec.id))
     c.resolved_source_ids = ids
-    if not ids:
-        return True, "No sources cited."
-    return True, "All cited sources exist in this room."
-
-
-def _check_content_schema(c: Context) -> tuple[bool, str]:
-    problems = content_problems(c.output_type, c.content)
-    if problems:
-        return False, f"{c.output_type} content invalid: {'; '.join(problems)}."
-    return True, f"{c.output_type} has the required field{'s' if ',' in required_fields(c.output_type) else ''}: {required_fields(c.output_type)}."
+    cited = f" and {len(ids)} cited source{'s' if len(ids) != 1 else ''} exist" if ids else ""
+    return True, f"{c.output_type} has the required field{'s' if ',' in required_fields(c.output_type) else ''}: {required_fields(c.output_type)}{cited}."
 
 
 _IMPL: dict[str, Callable[[Context], tuple[bool, str]]] = {
     "claim_valid": _check_claim_valid,
-    "permission": _check_permission,
     "revisions_current": _check_revisions_current,
-    "no_conflicting_edit": _check_no_conflicting_edit,
-    "citations_present": _check_citations_present,
-    "sources_exist": _check_sources_exist,
     "content_schema": _check_content_schema,
 }
 
 
 def run_checks(c: Context, on_result: Callable[[CheckResult], None] | None = None) -> list[CheckResult]:
-    enabled = (c.room.settings or {}).get("checks", {})
+    c.base_revision_id = c.output.current_revision_id if c.output is not None else None
     results: list[CheckResult] = []
     for order, name in enumerate(CHECKS, start=1):
-        if name in OPTIONAL_CHECKS and not enabled.get(name, True):
-            res = CheckResult(name, order, True, "Disabled in room settings.", skipped=True)
-            if name == "sources_exist":
-                # Still resolve what we can so cited sources are recorded.
-                try:
-                    _check_sources_exist(c)
-                except Exception:
-                    c.resolved_source_ids = []
-        else:
-            passed, detail = _IMPL[name](c)
-            res = CheckResult(name, order, passed, detail)
+        passed, detail = _IMPL[name](c)
+        res = CheckResult(name, order, passed, detail)
         results.append(res)
         if on_result:
             on_result(res)

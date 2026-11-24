@@ -82,10 +82,10 @@ def test_two_members_see_the_same_live_stream(world, client):
     with client.websocket_connect(_url(world, world.asha, since=latest)) as a, client.websocket_connect(_url(world, world.ben, since=latest)) as b:
         _recv(a, "hello")
         _recv(b, "hello")
-        client.patch(f"/api/rooms/{world.room_id}/settings", json={"min_sources": 2}, headers=world.asha["h"])
+        client.patch(f"/api/rooms/{world.room_id}/settings", json={"lease_minutes": 20}, headers=world.asha["h"])
         ea = _recv(a, "event", "room.settings_changed")["event"]
         eb = _recv(b, "event", "room.settings_changed")["event"]
-        assert ea["seq"] == eb["seq"] and ea["payload"]["changed"] == ["min_sources"]
+        assert ea["seq"] == eb["seq"] and ea["payload"]["changed"] == ["lease_minutes"]
 
 
 def test_presence_users_online_while_connected(world, client):

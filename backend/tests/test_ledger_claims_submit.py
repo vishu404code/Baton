@@ -188,9 +188,7 @@ def test_full_submit_creates_draft_revision(world, db, agent_of, client):
     db.commit()
     out = _submit(db, claude, world)
     assert out["ok"] and out["status"] == "completed", out
-    assert [c["name"] for c in out["checks"]] == [
-        "claim_valid", "permission", "revisions_current", "no_conflicting_edit", "citations_present", "sources_exist", "content_schema",
-    ]
+    assert [c["name"] for c in out["checks"]] == ["claim_valid", "revisions_current", "content_schema"]
     assert all(c["passed"] for c in out["checks"])
     assert out["result"]["label"] == "Draft 1" and out["result"]["revision"] == 1
     assert out["result"]["status"] == "in_review"  # room requires approval by default
@@ -205,7 +203,7 @@ def test_full_submit_creates_draft_revision(world, db, agent_of, client):
 
     types = [e["type"] for e in client.get(f"/api/rooms/{world.room_id}/events?since_seq=0&limit=500", headers=world.asha["h"]).json()["events"]]
     tail = types[types.index("task.claimed"):]
-    assert tail == ["task.claimed"] + ["verification.check"] * 7 + [
+    assert tail == ["task.claimed"] + ["verification.check"] * 3 + [
         "submission.saved", "revision.created", "submission.completed", "task.released", "approval.requested",
     ]
     board = client.get(f"/api/rooms/{world.room_id}/board", headers=world.asha["h"]).json()["tasks"]
@@ -230,7 +228,7 @@ def test_stale_based_on_is_rejected_with_actionable_message(world, db, agent_of,
     assert out["checks"][-1]["name"] == "revisions_current"
     assert out["checks"][-1]["detail"].startswith("stale: based on Decision 2 v1, now v2")
     assert 'read_record("Decision 2")' in out["checks"][-1]["detail"]
-    assert len(out["checks"]) == 3  # stops at the first failure
+    assert len(out["checks"]) == 2  # stops at the first failure
     assert db.execute(select(func.count()).select_from(Record).where(Record.type == "draft")).scalar_one() == 0
 
 
@@ -239,9 +237,8 @@ def test_stale_based_on_is_rejected_with_actionable_message(world, db, agent_of,
     [
         ({"based_on": []}, "revisions_current", "based_on is empty"),
         ({"based_on": [str(uuid.uuid4())]}, "revisions_current", "unknown revision"),
-        ({"sources": []}, "citations_present", "minimum is 1"),
-        ({"sources": ["Source 9"]}, "sources_exist", "not found"),
-        ({"sources": ["Decision 1"]}, "sources_exist", "not a source"),
+        ({"sources": ["Source 9"]}, "content_schema", "not found"),
+        ({"sources": ["Decision 1"]}, "content_schema", "not a source"),
         ({"content": {"text": "no body"}}, "content_schema", "body"),
     ],
 )
@@ -259,15 +256,12 @@ def test_unclaimed_submit_fails_claim_valid(world, db, agent_of):
     assert out["checks"][0]["name"] == "claim_valid" and out["checks"][0]["detail"].startswith("not claimed")
 
 
-def test_disabled_checks_are_skipped(world, db, agent_of, client):
-    client.patch(f"/api/rooms/{world.room_id}/settings", json={"checks": {"citations_present": False}}, headers=world.asha["h"])
+def test_sources_are_optional(world, db, agent_of):
     claude = agent_of(world.claude)
     claim_svc.claim_task(db, claude, "Task 1")
     db.commit()
     out = _submit(db, claude, world, sources=[])
-    assert out["status"] == "completed"
-    c5 = out["checks"][4]
-    assert c5["name"] == "citations_present" and c5.get("skipped") is True
+    assert out["status"] == "completed" and len(out["checks"]) == 3
 
 
 def test_same_key_is_applied_once(world, db, agent_of):
@@ -310,27 +304,3 @@ def test_review_handoff_needs_current_draft(world, db, agent_of, client):
     assert out["status"] == "rejected" and "Draft 1 v1, the draft you are reviewing" in out["checks"][-1]["detail"]
     out = sub_svc.submit(db, codex, "Task 2", review, _ids(world) + [draft["revision_id"]], [], "r2")
     assert out["status"] == "completed" and out["result"]["label"] == "Review 2"
-    assert out["checks"][4]["detail"] == "Citations are not required for reviews."
-
-
-def test_conflicting_edit_is_rejected(world, db, agent_of, client):
-    client.patch(f"/api/rooms/{world.room_id}/settings", json={"require_approval": False}, headers=world.asha["h"])
-    claude = agent_of(world.claude)
-    claim_svc.claim_task(db, claude, "Task 1")
-    db.commit()
-    v1 = _submit(db, claude, world, key="a")["result"]
-    # Reopen the task and write v2, then try to submit an edit based on v1.
-    task = db.get(Record, uuid.UUID(world.task1["record"]["id"]))
-    task.status = "open"
-    db.commit()
-    claim_svc.claim_task(db, claude, "Task 1")
-    db.commit()
-    v2 = _submit(db, claude, world, key="b", based_on=_ids(world) + [v1["revision_id"]])["result"]
-    assert v2["revision"] == 2
-    task.status = "open"
-    db.commit()
-    claim_svc.claim_task(db, claude, "Task 1")
-    db.commit()
-    out = _submit(db, claude, world, key="c", based_on=_ids(world) + [v1["revision_id"]])
-    assert out["checks"][-1]["name"] == "no_conflicting_edit"
-    assert out["checks"][-1]["detail"].startswith("conflict: Draft 1 changed to v2 by Asha's Claude since your base v1")

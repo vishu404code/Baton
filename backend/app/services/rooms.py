@@ -20,8 +20,6 @@ _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O/1/I
 def default_settings() -> dict:
     s = get_settings()
     return {
-        "checks": {"citations_present": True, "sources_exist": True, "content_schema": True},
-        "min_sources": s.baton_default_min_sources,
         "lease_minutes": s.baton_default_lease_minutes,
         "require_approval": s.baton_default_require_approval,
     }
@@ -84,14 +82,10 @@ def add_member(db: Session, room: Room, user: User, role: str = "member") -> tup
 def update_settings(room: Room, patch: dict) -> list[str]:
     """Apply a partial settings patch; return the changed keys (dotted for checks)."""
     current = {**default_settings(), **(room.settings or {})}
-    checks = dict(current.get("checks", {}))
     changed: list[str] = []
-    for name, value in (patch.get("checks") or {}).items():
-        if value is not None and checks.get(name) != value:
-            checks[name] = value
-            changed.append(f"checks.{name}")
-    current["checks"] = checks
-    for key in ("min_sources", "lease_minutes", "require_approval"):
+    current.pop("checks", None)
+    current.pop("min_sources", None)
+    for key in ("lease_minutes", "require_approval"):
         value = patch.get(key)
         if value is not None and current.get(key) != value:
             current[key] = value
