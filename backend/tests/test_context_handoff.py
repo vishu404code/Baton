@@ -93,7 +93,7 @@ def test_live_demo_runs_and_each_tool_reads_the_earlier_ones(client, monkeypatch
 
     from app.config import get_settings
 
-    monkeypatch.setattr(demo.time, "sleep", lambda s: None)
+    monkeypatch.setattr(demo, "SPEED", 0)
     monkeypatch.setattr(get_settings(), "baton_local_mode", True)
     local = client.post("/api/session/local").json()
     h = {"Authorization": f"Bearer {local['token']}"}
@@ -102,15 +102,16 @@ def test_live_demo_runs_and_each_tool_reads_the_earlier_ones(client, monkeypatch
     base = f"/api/rooms/{room['id']}/context"
     assert client.post(f"/api/rooms/{local['room_id']}/context/demo/start", headers=h).status_code == 403
 
-    assert client.post(f"{base}/demo/start", headers=h).json()["started"] is True
+    assert client.post(f"{base}/demo/start", json={"scenario": "food"}, headers=h).json()["started"] is True
     deadline = _t.time() + 20
     while _t.time() < deadline and not client.get(f"{base}/demo", headers=h).json()["done"]:
         _t.sleep(0.05)
     st = client.get(f"{base}/demo", headers=h).json()
-    assert st["done"] and len(st["transcript"]) == len(demo.STEPS)
+    assert st["done"] and st["scenario"] == "food" and len(st["transcript"]) == len(demo.SCENARIOS["food"]["steps"])
+    assert {x["id"] for x in st["scenarios"]} == set(demo.SCENARIOS)
     ctx = client.get(base, headers=h).json()
-    assert [e["tool"] for e in ctx["entries"]][::-1] == [s["tool"] for s in demo.STEPS]
-    assert "32,900" in ctx["handoff_markdown"]
+    assert [e["tool"] for e in ctx["entries"]][::-1] == [s["tool"] for s in demo.SCENARIOS["food"]["steps"]]
+    assert "Rawat Mishthan Bhandar" in ctx["handoff_markdown"] and "eating like a local" in ctx["handoff_markdown"]
 
     assert client.post(f"{base}/demo/reset", headers=h).status_code == 200
     assert client.get(base, headers=h).json()["entries"] == []

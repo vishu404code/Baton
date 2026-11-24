@@ -504,8 +504,8 @@ class ApiClient {
     return this.request(`/api/rooms/${roomId}/context/demo`);
   }
 
-  async startDemo(roomId: string): Promise<{ started: boolean }> {
-    return this.request(`/api/rooms/${roomId}/context/demo/start`, { method: 'POST' });
+  async startDemo(roomId: string, scenario = 'trip'): Promise<{ started: boolean }> {
+    return this.request(`/api/rooms/${roomId}/context/demo/start`, { method: 'POST', body: JSON.stringify({ scenario }) });
   }
 
   async resetDemo(roomId: string): Promise<{ ok: boolean }> {

@@ -49,13 +49,17 @@ def demo_status(room_id: uuid.UUID, user: User = Depends(current_user_ro), db: S
     return {**demo_svc.status(room_id), "is_demo_room": db.get(Room, room_id).name == demo_svc.DEMO_ROOM_NAME}
 
 
+class DemoStartIn(_In):
+    scenario: str = "trip"
+
+
 @router.post("/demo/start")
-def demo_start(room_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+def demo_start(room_id: uuid.UUID, body: DemoStartIn | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     room, _ = get_membership(db, room_id, user)
     if room.name != demo_svc.DEMO_ROOM_NAME:
         raise forbidden("The live demo runs in the demo project.")
     db.commit()
-    return {"started": demo_svc.start(room_id)}
+    return {"started": demo_svc.start(room_id, (body.scenario if body else "trip"))}
 
 
 @router.post("/demo/reset")

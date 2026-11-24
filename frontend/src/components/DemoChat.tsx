@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Play, RotateCcw, Check, Loader2, Sparkles } from 'lucide-react';
 import { api } from '../api/client';
@@ -7,7 +7,8 @@ const COLORS: Record<string, string> = { claude_code: '#F59E0B', codex: '#22D3EE
 
 interface Demo {
   running: boolean; done: boolean; step: number; total: number; tool: string | null; name: string | null;
-  prompt: string; reply: string; phase: string; read_count: number; is_demo_room: boolean;
+  prompt: string; reply: string; phase: string; read_count: number; is_demo_room: boolean; scenario: string;
+  scenarios: Array<{ id: string; title: string; blurb: string; steps: number }>;
   transcript: Array<{ tool: string; name: string; prompt: string; reply: string }>;
 }
 
@@ -47,6 +48,7 @@ const PHASES = [
 export const DemoChat: React.FC<{ roomId: string }> = ({ roomId }) => {
   const qc = useQueryClient();
   const endRef = useRef<HTMLDivElement>(null);
+  const [pick, setPick] = useState('trip');
   const { data } = useQuery<Demo>({
     queryKey: ['demo', roomId],
     queryFn: () => api.getDemo(roomId),
@@ -67,7 +69,7 @@ export const DemoChat: React.FC<{ roomId: string }> = ({ roomId }) => {
   const started = data.running || data.done || data.transcript.length > 0;
 
   const start = async () => {
-    await api.startDemo(roomId);
+    await api.startDemo(roomId, pick);
     qc.invalidateQueries({ queryKey: ['demo', roomId] });
   };
   const reset = async () => {
@@ -83,7 +85,7 @@ export const DemoChat: React.FC<{ roomId: string }> = ({ roomId }) => {
           <Sparkles className="w-4 h-4 text-[#818CF8]" />
           <div>
             <div className="text-[15px] font-semibold text-[#E6E7EB]">Live demo: four AIs, one conversation</div>
-            <div className="text-[12px] text-[#8B8FA3]">Plan a Jaipur trip. Each AI starts a fresh chat and already knows what the others did.</div>
+            <div className="text-[12px] text-[#8B8FA3]">Each AI starts a fresh chat and already knows what the others did. Pick a scenario and run it.</div>
           </div>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -94,10 +96,23 @@ export const DemoChat: React.FC<{ roomId: string }> = ({ roomId }) => {
           )}
           <button onClick={start} disabled={data.running} className="px-4 py-2 rounded-xl bg-[#6366F1] text-white text-[13px] font-semibold flex items-center gap-2 disabled:opacity-60">
             {data.running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            {data.running ? `Step ${data.step} of ${data.total}` : data.done ? 'Run again' : 'Run live demo'}
+            {data.running ? `Step ${data.step} of ${data.total}` : data.done ? 'Run selected' : 'Run live demo'}
           </button>
         </div>
       </div>
+
+      <div className="px-5 pt-4 flex flex-wrap gap-2">
+        {data.scenarios.map((sc) => {
+          const on = (data.running ? data.scenario : pick) === sc.id;
+          return (
+            <button key={sc.id} disabled={data.running} onClick={() => setPick(sc.id)} title={sc.blurb}
+              className={`px-3.5 py-1.5 rounded-full border text-[12.5px] font-medium transition-colors disabled:cursor-default ${on ? 'border-[#6366F1] bg-[#6366F1]/10 text-[#E6E7EB]' : 'border-[#2A2D37] bg-[#1D1F27] text-[#8B8FA3] hover:text-[#E6E7EB]'}`}>
+              {sc.title} <span className="opacity-60">· {sc.steps} steps</span>
+            </button>
+          );
+        })}
+      </div>
+      {!started && <div className="px-5 pt-2 pb-4 text-[12px] text-[#8B8FA3]">{data.scenarios.find((x) => x.id === pick)?.blurb}</div>}
 
       {started && (
         <div className="px-5 py-5 space-y-5">

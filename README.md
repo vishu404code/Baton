@@ -29,7 +29,11 @@ Your data lives in `~/Library/Application Support/Baton/` (`data/baton.db`, `log
 
 On the **Context** screen, pick **Claude, ChatGPT, Gemini or Antigravity** and type a message. No setup: Baton uses the Claude, ChatGPT (Codex) and Antigravity apps already signed in on your computer. An API key under **Tools & keys** is optional and, if added, is used instead (DeepSeek only works with a key). Every AI you ask reads the same shared memory first, so you can ask Claude, then ChatGPT, then Gemini and nobody needs the project explained again. Each answer is saved to the shared memory, so tools such as Claude Code, Codex and Antigravity (connected over MCP) see it too, and the other way round.
 
-The project **Live demo: Jaipur trip** has a one-click scripted demo of the same flow.
+The project **Live demo: Jaipur trip** has five one-click scripted demos of the same flow (trip plan, food route, forts and photos, bazaars and crafts, palace stay), each about 20 seconds.
+
+## What the AIs know
+
+Baton ships with the Jaipur Journals site (articles, places, itineraries, hotels) plus Wikipedia and Wikivoyage background on Jaipur, about 80 documents. Before each answer, Baton finds the documents that match the question and gives them to the AI. Add any website from the Context screen, or paste a link in a chat message. Tools connected over MCP can call `search_knowledge`.
 
 ## Switch between AI tools without re-explaining
 

@@ -20,13 +20,14 @@ from sqlalchemy import delete, func, select
 from app.models import KnowledgeDoc
 
 SEED_FILE = Path(__file__).resolve().parent.parent / "data" / "jaipur_journals.json"
+WEB_FILE = Path(__file__).resolve().parent.parent / "data" / "jaipur_web.json"
 SKIP_KEYS = {"id", "slug", "color", "cover", "image", "lat", "lng", "featured", "sample", "website", "short"}
 KIND_OF = {"articles": "article", "places": "place", "itineraries": "itinerary", "hotels": "hotel", "people": "person", "categories": "section"}
 STOP = set("a an the and or of to in on for with is are was were be it this that at by from as how what which who where when do does can i you we my your our me about please tell give show make".split())
 
 GUIDELINES = """You are the assistant for The Jaipur Journals, an online magazine about Jaipur, India (the Pink City): forts, food, crafts, bazaars, stays and trip planning.
 How to answer:
-- Use the knowledge documents provided. Quote real names, places, times, prices and tips from them. Mention the article or place by title when it helps.
+- Use the knowledge documents provided. The magazine's own articles and places come first; documents from Wikipedia and Wikivoyage are background and practical travel advice. Quote real names, places, times, prices and tips from them. Mention the article or place by title when it helps.
 - Never say you cannot access the website. Its content is included below. If something is not covered, say so briefly and then give your best general Jaipur advice, marked as general.
 - Be concrete and practical: a short plan, times, rough costs in rupees, one tip. Keep answers focused (under about 250 words unless asked for more).
 - When another assistant already answered earlier in this conversation, continue from it and stay consistent with its numbers and choices."""
@@ -157,17 +158,31 @@ def save_docs(db, docs: list[dict], source_url: str | None = None) -> int:
 
 
 def seed_defaults(db) -> None:
-    """Ship the Jaipur Journals content in the app so every AI knows it from the first launch (works offline)."""
-    if db.execute(select(func.count()).select_from(KnowledgeDoc)).scalar_one():
-        return
-    snap = json.loads(SEED_FILE.read_text())
-    docs = docs_from_collections("The Jaipur Journals", snap["source_url"], snap["collections"])
-    docs.insert(0, {"source": "The Jaipur Journals", "source_url": snap["source_url"], "kind": "instructions", "title": "How to answer", "tags": "", "text": GUIDELINES})
-    save_docs(db, docs)
+    """Ship the Jaipur Journals content, plus Wikipedia and Wikivoyage background, so every AI knows it from the first
+    launch (works offline). Each source is added once if it is missing."""
+    have = {s for (s,) in db.execute(select(KnowledgeDoc.source).distinct())}
+    if "The Jaipur Journals" not in have:
+        snap = json.loads(SEED_FILE.read_text())
+        docs = docs_from_collections("The Jaipur Journals", snap["source_url"], snap["collections"])
+        docs.insert(0, {"source": "The Jaipur Journals", "source_url": snap["source_url"], "kind": "instructions", "title": "How to answer", "tags": "", "text": GUIDELINES})
+        save_docs(db, docs)
+    else:  # keep the style guide current
+        g = db.execute(select(KnowledgeDoc).where(KnowledgeDoc.kind == "instructions")).scalars().first()
+        if g is not None and g.text != GUIDELINES:
+            g.text = GUIDELINES
+    if WEB_FILE.exists():
+        by_source: dict[str, list[dict]] = {}
+        for d in json.loads(WEB_FILE.read_text()):
+            by_source.setdefault(d["source"], []).append(d)
+        for source, docs in by_source.items():
+            if source not in have:
+                for d in docs:
+                    db.add(KnowledgeDoc(**d))
+        db.flush()
 
 
 def sources(db) -> list[dict]:
-    rows = db.execute(select(KnowledgeDoc.source, KnowledgeDoc.source_url, func.count()).group_by(KnowledgeDoc.source, KnowledgeDoc.source_url)).all()
+    rows = db.execute(select(KnowledgeDoc.source, func.min(KnowledgeDoc.source_url), func.count()).group_by(KnowledgeDoc.source)).all()
     return [{"source": s, "url": u, "documents": n} for s, u, n in rows]
 
 
