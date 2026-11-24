@@ -42,3 +42,23 @@ def test_roadmap_briefings_and_live_activity(world, client):
     assert claude_card["last"]["summary"].endswith("edited backend/api.py")
     assert "Roadmap" in client.get(f"{base}/context", headers=asha["h"]).json()["handoff_markdown"]
     assert client.get("/api/hooks/briefing", headers={"Authorization": "Bearer bat_wrong"}).status_code == 401
+
+
+def test_hook_script_reports_everything_a_tool_does():
+    """Live shows every kind of action: prompts, edits, reads, searches and every shell command (even ls)."""
+    import importlib.util
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location("baton_hook", Path(__file__).resolve().parents[1] / "app" / "data" / "baton_hook.py")
+    h = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(h)
+    proj = "/tmp/p"
+    d = h.describe
+    assert d("claude_code", {"tool_name": "Edit", "tool_input": {"file_path": "/tmp/p/backend/api.py"}}, proj) == ("edit", "edited backend/api.py", "backend/api.py")
+    assert d("claude_code", {"tool_name": "Bash", "tool_input": {"command": "ls -la"}}, proj)[0:2] == ("command", "ran: ls -la")
+    assert d("claude_code", {"tool_name": "Read", "tool_input": {"file_path": "/tmp/p/README.md"}}, proj)[0] == "read"
+    assert d("claude_code", {"tool_name": "Grep", "tool_input": {"pattern": "def main"}}, proj)[1] == "searched for def main"
+    assert d("antigravity", {"toolCall": {"name": "run_command", "args": {"CommandLine": "npm test"}}}, proj)[1] == "ran: npm test"
+    assert d("antigravity", {"toolCall": {"name": "view_file", "args": {"AbsolutePath": "/tmp/p/App.tsx"}}}, proj)[1] == "read App.tsx"
+    assert d("codex", {"tool_name": "apply_patch", "tool_input": {"command": "*** Begin Patch\n*** Add File: notes.md\n+x\n*** End Patch"}}, proj)[1] == "edited notes.md"
+    assert d("claude_code", {"tool_name": "mcp__baton__update_task", "tool_input": {}}, proj) is None

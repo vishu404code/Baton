@@ -135,13 +135,13 @@ def import_roadmap(room_id: uuid.UUID, body: ImportIn, user: User = Depends(curr
 
 
 @router.get("/api/rooms/{room_id}/activity")
-def get_activity(room_id: uuid.UUID, limit: int = 40, user: User = Depends(current_user_ro)) -> dict:
+def get_activity(room_id: uuid.UUID, limit: int = 200, user: User = Depends(current_user_ro)) -> dict:
     from app.db import read_session
 
     with read_session() as db:
         get_membership(db, room_id, user)
         rows = db.execute(select(Event).where(Event.room_id == room_id, Event.type.in_(("activity.logged", "task.updated", "roadmap.saved", "context.saved")))
-                          .order_by(Event.seq.desc()).limit(min(limit, 100))).scalars()
+                          .order_by(Event.seq.desc()).limit(min(limit, 300))).scalars()
         events = [event_out(e) for e in rows]
         agents = db.execute(select(Agent).where(Agent.room_id == room_id, Agent.revoked_at.is_(None)).order_by(Agent.created_at)).scalars().all()
         last_by_tool: dict[str, dict] = {}
@@ -250,9 +250,13 @@ def hooks_install(body: InstallIn, request: Request, user: User = Depends(curren
     from app import tool_connect as tc
     from app.db import SessionLocal
 
-    folder = os.path.expanduser(body.project_dir.strip())
-    if not os.path.isdir(folder):
-        raise bad_request(f"That folder doesn't exist: {folder}")
+    folders = [os.path.expanduser(f.strip()) for f in body.project_dir.split(",") if f.strip()]
+    for f in folders:
+        if not os.path.isdir(f):
+            raise bad_request(f"That folder doesn't exist: {f}")
+    if not folders:
+        raise bad_request("Enter a project folder.")
+    folder = ",".join(folders)
     url = f"{request.url.scheme}://{request.url.netloc}/mcp"
     with SessionLocal() as db:
         u = db.get(User, user.id)

@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Check, Send, ArrowRight, FileText, Sparkles } from 'lucide-react';
+import { Send, ArrowRight, FileText, Sparkles } from 'lucide-react';
 import { api } from '../api/client';
 import { Agent, ContextEntry } from '../api/types';
 import { formatTimeAgo } from '../lib/utils';
 import { DemoChat } from '../components/DemoChat';
-import { ChatPanel } from '../components/ChatPanel';
 import { KnowledgeCard } from '../components/KnowledgeCard';
 
 const TOOLS: Array<{ id: string; label: string; color: string }> = [
@@ -22,7 +21,6 @@ export const ContextView: React.FC<{ roomId: string; demoRoomId?: string; onOpen
   const [note, setNote] = useState('');
   const [next, setNext] = useState('');
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
   const isDemo = demoRoomId === roomId;
 
   const { data } = useQuery<{ entries: ContextEntry[]; handoff_markdown: string }>({
@@ -50,12 +48,6 @@ export const ContextView: React.FC<{ roomId: string; demoRoomId?: string; onOpen
     } finally {
       setBusy(false);
     }
-  };
-
-  const copy = () => {
-    navigator.clipboard.writeText(data?.handoff_markdown || '');
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
   };
 
   return (
@@ -101,7 +93,7 @@ export const ContextView: React.FC<{ roomId: string; demoRoomId?: string; onOpen
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_440px]">
+      <div className="flex-1 overflow-hidden grid grid-cols-1 ">
         {/* Progress log */}
         <div className="overflow-y-auto px-10 py-7 space-y-6">
           {demoRoomId && demoRoomId !== roomId && onOpenDemo && (
@@ -113,7 +105,6 @@ export const ContextView: React.FC<{ roomId: string; demoRoomId?: string; onOpen
               <ArrowRight className="w-5 h-5 text-[#818CF8]" />
             </button>
           )}
-          <ChatPanel roomId={roomId} onOpenKeys={onOpenKeys} />
           <DemoChat roomId={roomId} />
           <KnowledgeCard />
           <form onSubmit={save} className="baton-lift rounded-3xl border border-[#2A2D37] bg-[#111217] p-5 space-y-3">
@@ -194,21 +185,6 @@ export const ContextView: React.FC<{ roomId: string; demoRoomId?: string; onOpen
           </div>
         </div>
 
-        {/* The briefing the next AI receives */}
-        <div className="border-l border-[#2A2D37] flex flex-col min-h-0 bg-[#0F1015]">
-          <div className="px-6 py-5 border-b border-[#2A2D37] flex items-center justify-between">
-            <div>
-              <h2 className="text-lg text-[#E6E7EB]">The next AI reads this</h2>
-              <div className="text-[12px] text-[#8B8FA3] mt-0.5">Fetched automatically via <code>get_handoff</code></div>
-            </div>
-            <button onClick={copy} className="px-3 py-2 rounded-xl bg-[#1D1F27] border border-[#2A2D37] text-[12px] text-[#E6E7EB] flex items-center gap-1.5 hover:border-[#6366F1] transition-colors">
-              {copied ? <Check className="w-3.5 h-3.5 text-[#22C55E]" /> : <Copy className="w-3.5 h-3.5" />} {copied ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-          <div className="flex-1 overflow-auto p-5">
-            <pre className="rounded-2xl border border-[#2A2D37] bg-[#111217] p-5 text-[12px] leading-[1.7] font-mono text-[#C9CBD6] whitespace-pre-wrap">{data?.handoff_markdown || 'Loading…'}</pre>
-          </div>
-        </div>
       </div>
     </div>
   );

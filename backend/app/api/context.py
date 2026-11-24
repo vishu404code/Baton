@@ -2,19 +2,17 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends
 from pydantic import Field
 from sqlalchemy.orm import Session
 
 from app.auth import current_user, current_user_ro, get_membership
 from app.db import get_db
-from app.errors import bad_request, forbidden
-from app.llm.base import LLMError
+from app.errors import forbidden
 from app.models import Room, User
 from app.schemas import _In
 from app.serializers import actor_user
 from app.services import context as context_svc
-from app.services import chat as chat_svc
 from app.services import demo as demo_svc
 
 router = APIRouter(prefix="/api/rooms/{room_id}/context", tags=["context"])
@@ -71,33 +69,3 @@ def demo_reset(room_id: uuid.UUID, user: User = Depends(current_user), db: Sessi
     demo_svc.reset(room_id)
     return {"ok": True}
 
-
-class ChatIn(_In):
-    provider: str = Field(min_length=1, max_length=24)
-    text: str = Field(min_length=1, max_length=6000)
-
-
-@router.get("/chat")
-def chat_state(room_id: uuid.UUID, user: User = Depends(current_user_ro), db: Session = Depends(get_db)) -> dict:
-    get_membership(db, room_id, user)
-    return chat_svc.state(db, room_id)
-
-
-@router.post("/chat", status_code=202)
-def chat_send(room_id: uuid.UUID, body: ChatIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
-    room, _ = get_membership(db, room_id, user)
-    try:
-        return chat_svc.send(db, room, user, body.provider, body.text)
-    except LLMError as e:
-        raise bad_request(str(e)) from None
-
-
-@router.delete("/chat", status_code=204)
-def chat_clear(room_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(get_db)) -> Response:
-    get_membership(db, room_id, user)
-    from sqlalchemy import delete as _del
-
-    from app.models import ChatMessage
-
-    db.execute(_del(ChatMessage).where(ChatMessage.room_id == room_id))
-    return Response(status_code=204)

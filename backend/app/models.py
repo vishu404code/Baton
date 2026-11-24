@@ -286,20 +286,6 @@ class ContextEntry(Base):
     created_at: Mapped[datetime] = _ts()
 
 
-class ChatMessage(Base):
-    """One message in the project's shared chat: what the user asked, which AI answered (or why it couldn't)."""
-
-    __tablename__ = "chat_messages"
-    id: Mapped[uuid.UUID] = _uuid_pk()
-    room_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"), index=True)
-    role: Mapped[str] = mapped_column(String(8))  # user | ai | error
-    provider: Mapped[str | None] = mapped_column(String(24), nullable=True)  # which AI was asked / answered
-    label: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    model: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    content: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = _ts()
-
-
 class KnowledgeDoc(Base):
     """A piece of reference knowledge every AI can read (articles, places, itineraries, a fetched web page...)."""
 

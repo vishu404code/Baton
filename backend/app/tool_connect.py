@@ -115,8 +115,8 @@ def connect_claude(url: str, token: str) -> str:
 
 HOOK_TOOLS = ("claude_code", "codex", "antigravity")
 HOOK_DIR_REL = "Library/Application Support/Baton/hooks"
-EDIT_MATCH = {"claude_code": "Edit|Write|MultiEdit|NotebookEdit|Bash", "codex": "apply_patch|Bash",
-              "antigravity": "write_to_file|replace_file_content|multi_replace_file_content|run_command"}
+EDIT_MATCH = {"claude_code": "Edit|Write|MultiEdit|NotebookEdit|Bash|Read|Grep|Glob|WebFetch|WebSearch", "codex": "apply_patch|Bash",
+              "antigravity": "write_to_file|replace_file_content|multi_replace_file_content|run_command|view_file|list_dir|grep_search|find_by_name|search_web|read_url_content"}
 
 
 def hook_script_path() -> Path:
