@@ -23,7 +23,7 @@ from starlette.types import Receive, Scope, Send
 from app import __version__
 from app.agent_instructions import MCP_INSTRUCTIONS
 from app.auth import agent_from_token, bearer
-from app.db import SessionLocal
+from app.db import SessionLocal, read_session
 from app.errors import AgentError
 from app.models import Agent, Claim, Comment, Record, Room, User, utcnow
 from app.record_views import based_on_out, comment_out, revision_out, sources_out
@@ -402,7 +402,7 @@ class MCPEndpoint:
         token = bearer(headers.get("authorization"))
 
         def check() -> bool:
-            with SessionLocal() as db:
+            with read_session() as db:
                 return agent_from_token(db, token) is not None
 
         if not await anyio.to_thread.run_sync(check):

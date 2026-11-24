@@ -6,7 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+psycopg://baton:baton@localhost:5432/baton"
+    # SQLite file lives here: <data dir>/baton.db (the desktop app sets this to its user-data folder).
+    baton_data_dir: str = "./data"
 
     baton_public_url: str = "http://localhost:8000"
     baton_cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"

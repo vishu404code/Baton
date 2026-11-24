@@ -52,6 +52,7 @@ def append_event(
     payload: dict | None = None,
     record_ids: Iterable[uuid.UUID | str] = (),
 ) -> Event:
+    room_id = uuid.UUID(str(room_id))
     room = db.execute(select(Room).where(Room.id == room_id).with_for_update()).scalar_one()
     room.last_seq += 1
     ev = Event(

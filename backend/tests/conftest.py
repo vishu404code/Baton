@@ -1,63 +1,45 @@
-"""Test setup: a real Postgres database named <db>_test, migrated with Alembic, truncated per test.
+"""Test setup (SQLite): a fresh temporary data directory (one baton.db) for every test.
 
-Run inside the container:  docker compose exec backend pytest -q
+Run:  cd backend && uv run --python 3.12 --extra dev pytest -q
+
+SQLite has one writer. A test's own `db` session is committed before every API call the test makes
+(see _Client), so the test never holds the writer while the server waits for it.
 """
 
 import os
-import re
+import tempfile
 
-import psycopg
 import pytest
 
-_base_url = os.environ.get("DATABASE_URL", "postgresql+psycopg://baton:baton@localhost:5432/baton")
-TEST_DB_URL = re.sub(r"/([^/?]+)(\?.*)?$", lambda m: f"/{m.group(1)}_test{m.group(2) or ''}", _base_url)
-os.environ["DATABASE_URL"] = TEST_DB_URL  # must happen before app modules are imported
+_TMP = tempfile.mkdtemp(prefix="baton-test-")
+os.environ["BATON_DATA_DIR"] = os.path.join(_TMP, "data")  # must be set before app modules import
 os.environ["BATON_CHECK_DELAY_MS"] = "0"
+os.environ["BATON_PUBLIC_URL"] = "http://localhost:8000"
+os.environ["BATON_PROVIDER_KEYS_FILE"] = os.path.join(_TMP, "providers.json")
+
+_open_sessions: list = []
 
 
-def _admin_dsn(url: str) -> tuple[str, str]:
-    plain = url.replace("postgresql+psycopg://", "postgresql://")
-    dbname = re.search(r"/([^/?]+)(\?.*)?$", plain).group(1)
-    return re.sub(r"/[^/?]+(\?.*)?$", "/postgres", plain), dbname
-
-
-def _db_reachable() -> bool:
-    admin, _ = _admin_dsn(TEST_DB_URL)
-    try:
-        psycopg.connect(admin, connect_timeout=2).close()
-        return True
-    except Exception:
-        return False
+def _flush_test_sessions() -> None:
+    for s in list(_open_sessions):
+        if s.in_transaction():
+            s.commit()
 
 
 @pytest.fixture(scope="session")
 def database():
-    if not _db_reachable():
-        pytest.skip("Postgres not reachable; run tests with `docker compose exec backend pytest`.")
-    admin, dbname = _admin_dsn(TEST_DB_URL)
-    with psycopg.connect(admin, autocommit=True) as conn:
-        conn.execute(f'DROP DATABASE IF EXISTS "{dbname}" WITH (FORCE)')
-        conn.execute(f'CREATE DATABASE "{dbname}"')
-
-    from alembic import command
-    from alembic.config import Config
-
-    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    cfg = Config(os.path.join(here, "alembic.ini"))
-    cfg.set_main_option("script_location", os.path.join(here, "alembic"))
-    command.upgrade(cfg, "head")
-    yield TEST_DB_URL
+    yield os.environ["BATON_DATA_DIR"]
 
 
 @pytest.fixture()
 def db_clean(database):
-    from sqlalchemy import text
+    import shutil
 
-    from app.db import Base, engine
+    from app.db import data_dir, init_db, reset_engines
 
-    tables = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
-    with engine.begin() as conn:
-        conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+    reset_engines()
+    shutil.rmtree(data_dir(), ignore_errors=True)
+    init_db()
     yield
 
 
@@ -67,7 +49,16 @@ def client(db_clean):
 
     from app.main import app
 
-    with TestClient(app) as c:
+    class _Client(TestClient):
+        def request(self, *args, **kwargs):
+            _flush_test_sessions()
+            return super().request(*args, **kwargs)
+
+        def websocket_connect(self, *args, **kwargs):
+            _flush_test_sessions()
+            return super().websocket_connect(*args, **kwargs)
+
+    with _Client(app) as c:
         yield c
 
 
@@ -75,8 +66,13 @@ def client(db_clean):
 def db(db_clean):
     from app.db import SessionLocal
 
-    with SessionLocal() as s:
+    s = SessionLocal()
+    _open_sessions.append(s)
+    try:
         yield s
+    finally:
+        _open_sessions.remove(s)
+        s.close()
 
 
 class Api:

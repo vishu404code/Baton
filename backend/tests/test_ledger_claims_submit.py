@@ -129,9 +129,9 @@ def test_parallel_claims_have_exactly_one_winner(world, client, database):
     barrier = threading.Barrier(len(agents))
 
     def go(agent_id):
+        barrier.wait()  # all start together; SQLite then lets exactly one BEGIN IMMEDIATE through at a time
         with SessionLocal() as s:
             agent = s.get(Agent, agent_id)
-            barrier.wait()
             try:
                 claim_svc.claim_task(s, agent, "Task 1")
                 s.commit()

@@ -64,13 +64,13 @@ def snapshot(room_id: str | uuid.UUID) -> dict:
     """The GET /presence shape for one room."""
     from sqlalchemy import select
 
-    from app.db import SessionLocal
+    from app.db import read_session
     from app.models import RoomMember, User
     from app.serializers import active_claim_for_agent, agent_out
     from app.services.events import iso
 
     rid = uuid.UUID(str(room_id))
-    with SessionLocal() as db:
+    with read_session() as db:
         members = db.execute(
             select(RoomMember, User).join(User, User.id == RoomMember.user_id).where(RoomMember.room_id == rid).order_by(RoomMember.joined_at)
         ).all()

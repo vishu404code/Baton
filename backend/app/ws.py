@@ -16,7 +16,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
 from app.auth import user_from_token
-from app.db import SessionLocal
+from app.db import read_session
 from app.models import Event, Room, RoomMember
 from app.services import presence
 from app.services.events import bus, event_out
@@ -28,7 +28,7 @@ REPLAY_PAGE = 500
 
 def _authorize(room_id: str, token: str | None) -> tuple[int, str | None, str | None]:
     """Return (close_code or 0, user_id, display_name)."""
-    with SessionLocal() as db:
+    with read_session() as db:
         user = user_from_token(db, token)
         if user is None:
             return 4401, None, None
@@ -44,7 +44,7 @@ def _authorize(room_id: str, token: str | None) -> tuple[int, str | None, str | 
 
 
 def _load_events(room_id: str, since_seq: int) -> list[dict]:
-    with SessionLocal() as db:
+    with read_session() as db:
         rows = db.execute(
             select(Event)
             .where(Event.room_id == uuid.UUID(room_id), Event.seq > since_seq)
@@ -55,7 +55,7 @@ def _load_events(room_id: str, since_seq: int) -> list[dict]:
 
 
 def _latest_seq(room_id: str) -> int:
-    with SessionLocal() as db:
+    with read_session() as db:
         return db.get(Room, uuid.UUID(room_id)).last_seq
 
 

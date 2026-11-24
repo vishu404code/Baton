@@ -7,7 +7,6 @@ from collections import deque
 from datetime import timedelta
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.orm import Session
 
 from app.models import Agent, Approval, Dependency, Event, Record, Revision, RoomMember, Submission, User, utcnow
@@ -36,9 +35,9 @@ def _events_for_submission(db: Session, sub: Submission) -> list[Event]:
                 Event.room_id == sub.room_id,
                 Event.type.in_(RECOVERY_EVENT_TYPES),
                 or_(
-                    p["submission_id"].astext == sid,
-                    p["submission"]["id"].astext == sid,
-                    p["revision"]["submission_id"].astext == sid,
+                    p["submission_id"].as_string() == sid,
+                    p["submission"]["id"].as_string() == sid,
+                    p["revision"]["submission_id"].as_string() == sid,
                 ),
             )
             .order_by(Event.seq)
@@ -218,11 +217,14 @@ def trace(db: Session, record: Record, revision_number: int | None = None) -> di
         record_ids.append(str(record.parent_task_id))
     story = []
     if record_ids:
-        events = db.execute(
-            select(Event)
-            .where(Event.room_id == record.room_id, Event.type.in_(STORY_TYPES), Event.record_ids.has_any(array(record_ids)))
-            .order_by(Event.seq)
-        ).scalars()
+        wanted = set(record_ids)
+        events = (
+            e
+            for e in db.execute(
+                select(Event).where(Event.room_id == record.room_id, Event.type.in_(STORY_TYPES)).order_by(Event.seq)
+            ).scalars()
+            if wanted & set(e.record_ids or [])
+        )
         for e in events:
             if e.type == "revision.created" and e.payload.get("revision", {}).get("number", 1) > 1 and (e.payload.get("record") or {}).get("type") == "decision":
                 continue  # decision.changed tells this better

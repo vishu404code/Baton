@@ -2,6 +2,7 @@
 
 import re
 import threading
+import uuid
 
 from app.config import get_settings
 
@@ -256,7 +257,7 @@ def test_concurrent_events_get_unique_sequential_seqs(api, database):
     from app.services.events import SYSTEM_ACTOR, append_event
 
     asha = api.signup("Asha")
-    room_id = api.room(asha)["id"]  # seq 1
+    room_id = uuid.UUID(api.room(asha)["id"])  # seq 1
     errors = []
 
     def writer():

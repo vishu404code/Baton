@@ -14,7 +14,7 @@ from app import __version__
 from app import logging_filters, ws
 from app.api import agents, approvals, evidence, records, rooms, session
 from app.config import get_settings
-from app.db import SessionLocal, db_ok
+from app.db import SessionLocal, db_ok, init_db
 from app.errors import install_error_handlers
 from app.mcp_server import mcp_endpoint
 from app.services import claims as claim_svc
@@ -44,6 +44,7 @@ async def _lease_sweeper() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    init_db()
     bus.loop = asyncio.get_running_loop()
     session_manager = mcp_endpoint.new_app()
     background = [asyncio.create_task(_lease_sweeper()), asyncio.create_task(presence.watcher())]

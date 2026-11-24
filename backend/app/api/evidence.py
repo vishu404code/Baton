@@ -28,9 +28,12 @@ def list_events(
     stmt = select(Event).where(Event.room_id == room_id, Event.seq > since_seq)
     if types:
         stmt = stmt.where(Event.type.in_([t.strip() for t in types.split(",") if t.strip()]))
+    stmt = stmt.order_by(Event.seq)
     if record_id:
-        stmt = stmt.where(Event.record_ids.contains([str(record_id)]))
-    rows = db.execute(stmt.order_by(Event.seq).limit(limit + 1)).scalars().all()
+        # record_ids is a JSON list; filter in Python (a room's event log is small on one device)
+        rows = [e for e in db.execute(stmt).scalars() if str(record_id) in (e.record_ids or [])]
+    else:
+        rows = db.execute(stmt.limit(limit + 1)).scalars().all()
     has_more = len(rows) > limit
     return {"events": [event_out(e) for e in rows[:limit]], "latest_seq": room.last_seq, "has_more": has_more}
 

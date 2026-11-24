@@ -11,16 +11,18 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean,
-    DateTime,
+    JSON,
     ForeignKey,
     Index,
     Integer,
     String,
     Text,
+    TypeDecorator,
     UniqueConstraint,
+    Uuid,
+    false,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -30,12 +32,33 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class UTCDateTime(TypeDecorator):
+    """Timezone-aware UTC datetimes on SQLite.
+
+    Stored as fixed-width ISO-8601 text (microseconds, +00:00), so SQL comparisons and ORDER BY on
+    the text behave exactly like real timestamps, and values read back timezone-aware.
+    """
+
+    impl = String(32)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
+
+    def process_result_value(self, value, dialect):
+        return None if value is None else datetime.fromisoformat(value)
+
+
 def _uuid_pk() -> Mapped[uuid.UUID]:
-    return mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    return mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
 
 
 def _ts(nullable: bool = False) -> Mapped[datetime]:
-    return mapped_column(DateTime(timezone=True), nullable=nullable, default=None if nullable else utcnow)
+    return mapped_column(UTCDateTime, nullable=nullable, default=None if nullable else utcnow)
 
 
 # --- Enumerations (stored as strings, validated in code) ---------------------------------
@@ -71,10 +94,10 @@ class Room(Base):
     name: Mapped[str] = mapped_column(String(80))
     invite_code: Mapped[str] = mapped_column(String(32), unique=True)
     owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
-    settings: Mapped[dict] = mapped_column(JSONB, default=dict)
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)
     # Last allocated event sequence number. Incremented under a row lock (services/events.py).
     last_seq: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     created_at: Mapped[datetime] = _ts()
 
 
@@ -112,7 +135,7 @@ class Record(Base):
     status: Mapped[str] = mapped_column(String(16))
     current_revision: Mapped[int] = mapped_column(Integer, default=0)
     current_revision_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("revisions.id", use_alter=True, name="fk_records_current_revision"), nullable=True
+        ForeignKey("revisions.id", name="fk_records_current_revision"), nullable=True
     )
     parent_task_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("records.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = _ts()
@@ -126,15 +149,15 @@ class Revision(Base):
     record_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("records.id", ondelete="CASCADE"), index=True)
     number: Mapped[int] = mapped_column(Integer)
     title: Mapped[str] = mapped_column(String(200))
-    content: Mapped[dict] = mapped_column(JSONB)
+    content: Mapped[dict] = mapped_column(JSON)
     author_agent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agents.id"), nullable=True)
     author_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     # Exact revision IDs this revision was based on, and the source record IDs it cites.
-    based_on: Mapped[list] = mapped_column(JSONB, default=list)
-    source_ids: Mapped[list] = mapped_column(JSONB, default=list)
+    based_on: Mapped[list] = mapped_column(JSON, default=list)
+    source_ids: Mapped[list] = mapped_column(JSON, default=list)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     submission_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("submissions.id", use_alter=True, name="fk_revisions_submission"), nullable=True
+        ForeignKey("submissions.id", name="fk_revisions_submission"), nullable=True
     )
     created_at: Mapped[datetime] = _ts()
 
@@ -154,15 +177,15 @@ class Claim(Base):
     __tablename__ = "claims"
     __table_args__ = (
         # Two agents can never hold the same task: at most one active claim per task.
-        Index("uq_claims_one_active_per_task", "task_id", unique=True, postgresql_where=text("status = 'active'")),
+        Index("uq_claims_one_active_per_task", "task_id", unique=True, postgresql_where=text("status = 'active'"), sqlite_where=text("status = 'active'")),
     )
     id: Mapped[uuid.UUID] = _uuid_pk()
     task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("records.id", ondelete="CASCADE"), index=True)
     agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(16))
-    lease_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    lease_expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
     # True when the task was stale when claimed, so the redo needs human approval.
-    is_redo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_redo: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     created_at: Mapped[datetime] = _ts()
     ended_at: Mapped[datetime | None] = _ts(nullable=True)
 
@@ -175,15 +198,15 @@ class Submission(Base):
     task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("records.id", ondelete="CASCADE"), index=True)
     agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
     base_revision_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("revisions.id"), nullable=True)
-    based_on: Mapped[list] = mapped_column(JSONB, default=list)
-    source_ids: Mapped[list] = mapped_column(JSONB, default=list)
-    payload: Mapped[dict] = mapped_column(JSONB)
+    based_on: Mapped[list] = mapped_column(JSON, default=list)
+    source_ids: Mapped[list] = mapped_column(JSON, default=list)
+    payload: Mapped[dict] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(16))
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     result_revision_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("revisions.id"), nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, default=1)
-    resumed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
-    interrupted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    resumed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    interrupted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     created_at: Mapped[datetime] = _ts()
     saved_at: Mapped[datetime | None] = _ts(nullable=True)
     completed_at: Mapped[datetime | None] = _ts(nullable=True)
@@ -196,7 +219,7 @@ class VerificationResult(Base):
     check_name: Mapped[str] = mapped_column(String(32))
     order: Mapped[int] = mapped_column(Integer)
     passed: Mapped[bool] = mapped_column(Boolean)
-    skipped: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    skipped: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     detail: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = _ts()
 
@@ -235,9 +258,9 @@ class Event(Base):
     seq: Mapped[int] = mapped_column(Integer)
     type: Mapped[str] = mapped_column(String(40), index=True)
     # Snapshot of who acted, in the Actor shape from the API contract.
-    actor: Mapped[dict] = mapped_column(JSONB)
+    actor: Mapped[dict] = mapped_column(JSON)
     summary: Mapped[str] = mapped_column(Text)
-    payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
     # Record IDs this event touches, for GET /events?record_id= filtering.
-    record_ids: Mapped[list] = mapped_column(JSONB, default=list)
+    record_ids: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = _ts()
