@@ -3,6 +3,10 @@
 import re
 import threading
 
+from app.config import get_settings
+
+MCP_URL = get_settings().mcp_url  # follows BATON_PUBLIC_URL (LAN IP when set)
+
 from sqlalchemy import select
 
 
@@ -160,13 +164,13 @@ def test_create_agent_returns_token_once_and_snippets(api, client, db):
     assert stored == hash_token(token) and token not in stored
 
     snips = body["config"]["snippets"]
-    assert body["config"]["mcp_url"] == "http://localhost:8000/mcp"
+    assert body["config"]["mcp_url"] == MCP_URL
     assert snips["claude_code"]["command"] == (
-        f'claude mcp add --transport http baton http://localhost:8000/mcp --header "Authorization: Bearer {token}"'
+        f'claude mcp add --transport http baton {MCP_URL} --header "Authorization: Bearer {token}"'
     )
     assert 'bearer_token_env_var = "BATON_TOKEN"' in snips["codex"]["config_toml"]
     assert snips["codex"]["env"] == f"export BATON_TOKEN={token}"
-    assert '"httpUrl": "http://localhost:8000/mcp"' in snips["gemini_cli"]["settings_json"]
+    assert f'"httpUrl": "{MCP_URL}"' in snips["gemini_cli"]["settings_json"]
     assert "get_room_context" in body["config"]["instructions_md"]
 
     # The config endpoint can't know the token, so it uses the placeholder.

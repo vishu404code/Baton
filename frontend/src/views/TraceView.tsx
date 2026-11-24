@@ -7,6 +7,7 @@ import {
   Edge,
   Position,
   MarkerType,
+  Handle,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
@@ -45,6 +46,9 @@ function CustomNodeComponent({ data }: { data: TraceNode }) {
     <div
       className={`px-3 py-2 rounded-xl bg-[#1D1F27] border-2 shadow-lg min-w-[140px] max-w-[200px] text-xs transition-all ${getBorderColor()}`}
     >
+      {/* Connection points: without Handles React Flow cannot attach any edge. */}
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
       <div className="flex items-center gap-1.5 mb-1">
         {data.kind === 'agent' ? (
           <Bot className="w-3.5 h-3.5 text-[#F59E0B]" />

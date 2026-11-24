@@ -306,7 +306,11 @@ class ApiClient {
 
   async getAgentConfig(roomId: string, agentId: string): Promise<AgentConfigResponse> {
     const res = await this.request<any>(`/api/rooms/${roomId}/agents/${agentId}/config`);
-    return this.isMockMode ? res : adaptConfig(res);
+    if (this.isMockMode) return res;
+    // The config endpoint doesn't repeat the agent's tool and role; the dialog needs them.
+    const { agents } = await this.getAgents(roomId);
+    const agent = agents.find((a) => a.id === agentId);
+    return { ...adaptConfig(res), tool: agent?.tool ?? 'claude_code', role: agent?.role ?? 'planner' };
   }
 
   async revokeAgent(roomId: string, agentId: string): Promise<{ revoked: boolean }> {

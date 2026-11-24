@@ -131,7 +131,7 @@ def seed() -> dict:
         for rec_id in (approval.record_id, approval.task_id):
             db.get(Record, rec_id).status = "approved"
         append_event(
-            db, room.id, "approval.decided", actor_user(asha, "owner"), "Asha approved Draft 1 v1 (volunteer rota)",
+            db, room.id, "approval.decided", actor_user(asha, "owner"), "Asha approved Draft 3 v1 (volunteer rota)",
             {"approval": {"id": str(approval.id), "status": "approved", "comment": approval.comment}},
             record_ids=[approval.record_id, approval.task_id],
         )
