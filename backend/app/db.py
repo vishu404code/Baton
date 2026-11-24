@@ -77,7 +77,13 @@ def init_db() -> None:
     """Create all tables if they don't exist (idempotent)."""
     from app import models  # noqa: F401  (registers the tables on Base.metadata)
 
-    Base.metadata.create_all(_engine("write"))
+    eng = _engine("write")
+    Base.metadata.create_all(eng)
+    # Tiny additive migration for databases created before a column existed.
+    with eng.begin() as conn:
+        cols = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(context_entries)")}
+        if cols and "is_demo" not in cols:
+            conn.exec_driver_sql("ALTER TABLE context_entries ADD COLUMN is_demo BOOLEAN NOT NULL DEFAULT 0")
 
 
 def reset_engines() -> None:

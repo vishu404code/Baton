@@ -6,12 +6,14 @@ from fastapi import APIRouter, Depends
 from pydantic import Field
 from sqlalchemy.orm import Session
 
-from app.auth import current_user, get_membership
+from app.auth import current_user, current_user_ro, get_membership
 from app.db import get_db
-from app.models import User
+from app.errors import forbidden
+from app.models import Room, User
 from app.schemas import _In
 from app.serializers import actor_user
 from app.services import context as context_svc
+from app.services import demo as demo_svc
 
 router = APIRouter(prefix="/api/rooms/{room_id}/context", tags=["context"])
 
@@ -37,3 +39,28 @@ def add_note(room_id: uuid.UUID, body: NoteIn, user: User = Depends(current_user
     )
     db.commit()
     return context_svc.entry_out(e)
+
+
+@router.get("/demo")
+def demo_status(room_id: uuid.UUID, user: User = Depends(current_user_ro), db: Session = Depends(get_db)) -> dict:
+    get_membership(db, room_id, user)
+    return {**demo_svc.status(room_id), "is_demo_room": db.get(Room, room_id).name == demo_svc.DEMO_ROOM_NAME}
+
+
+@router.post("/demo/start")
+def demo_start(room_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    room, _ = get_membership(db, room_id, user)
+    if room.name != demo_svc.DEMO_ROOM_NAME:
+        raise forbidden("The live demo runs in the demo project.")
+    db.commit()
+    return {"started": demo_svc.start(room_id)}
+
+
+@router.post("/demo/reset")
+def demo_reset(room_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    room, _ = get_membership(db, room_id, user)
+    if room.name != demo_svc.DEMO_ROOM_NAME:
+        raise forbidden("Only the demo project can be reset.")
+    db.commit()
+    demo_svc.reset(room_id)
+    return {"ok": True}

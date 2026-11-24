@@ -480,6 +480,18 @@ class ApiClient {
     return this.request(`/api/rooms/${roomId}/context`);
   }
 
+  async getDemo(roomId: string): Promise<any> {
+    return this.request(`/api/rooms/${roomId}/context/demo`);
+  }
+
+  async startDemo(roomId: string): Promise<{ started: boolean }> {
+    return this.request(`/api/rooms/${roomId}/context/demo/start`, { method: 'POST' });
+  }
+
+  async resetDemo(roomId: string): Promise<{ ok: boolean }> {
+    return this.request(`/api/rooms/${roomId}/context/demo/reset`, { method: 'POST' });
+  }
+
   async addContextNote(roomId: string, summary: string, next_steps?: string): Promise<ContextEntry> {
     return this.request(`/api/rooms/${roomId}/context`, {
       method: 'POST',

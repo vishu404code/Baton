@@ -4,6 +4,7 @@ import { Copy, Check, Send, ArrowRight, FileText, Sparkles } from 'lucide-react'
 import { api } from '../api/client';
 import { Agent, ContextEntry } from '../api/types';
 import { formatTimeAgo } from '../lib/utils';
+import { DemoChat } from '../components/DemoChat';
 
 const TOOLS: Array<{ id: string; label: string; color: string }> = [
   { id: 'claude_code', label: 'Claude Code', color: '#F59E0B' },
@@ -14,12 +15,13 @@ const TOOLS: Array<{ id: string; label: string; color: string }> = [
 const colorOf = (tool: string) => TOOLS.find((t) => t.id === tool)?.color || '#8B8FA3';
 const labelOf = (tool: string) => (tool === 'user' ? 'You' : TOOLS.find((t) => t.id === tool)?.label || 'AI tool');
 
-export const ContextView: React.FC<{ roomId: string }> = ({ roomId }) => {
+export const ContextView: React.FC<{ roomId: string; demoRoomId?: string; onOpenDemo?: () => void }> = ({ roomId, demoRoomId, onOpenDemo }) => {
   const qc = useQueryClient();
   const [note, setNote] = useState('');
   const [next, setNext] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const isDemo = demoRoomId === roomId;
 
   const { data } = useQuery<{ entries: ContextEntry[]; handoff_markdown: string }>({
     queryKey: ['context', roomId],
@@ -57,20 +59,20 @@ export const ContextView: React.FC<{ roomId: string }> = ({ roomId }) => {
   return (
     <div className="h-full flex flex-col baton-fade">
       {/* Hero */}
-      <div className="relative px-10 pt-9 pb-7 border-b border-[#2A2D37] overflow-hidden">
+      <div className={`relative px-10 ${isDemo ? "pt-5 pb-4" : "pt-9 pb-7"} border-b border-[#2A2D37] overflow-hidden`}>
         <div className="baton-hero-glow" />
         <div className="relative max-w-5xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#6366F1]/40 bg-[#6366F1]/10 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#818CF8]">
+          <div className={`${isDemo ? "hidden" : "inline-flex"} items-center gap-2 px-3 py-1 rounded-full border border-[#6366F1]/40 bg-[#6366F1]/10 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#818CF8]`}>
             <Sparkles className="w-3.5 h-3.5" /> One memory for every AI
           </div>
-          <h1 className="mt-4 text-[44px] leading-[1.05] text-[#E6E7EB]">
+          <h1 className={`${isDemo ? "text-[30px]" : "mt-4 text-[44px]"} leading-[1.05] text-[#E6E7EB]`}>
             Switch tools. <span className="baton-accent">Keep the thread.</span>
           </h1>
-          <p className="mt-3 text-[15px] leading-relaxed text-[#8B8FA3] max-w-2xl">
+          <p className={`${isDemo ? "hidden" : ""} mt-3 text-[15px] leading-relaxed text-[#8B8FA3] max-w-2xl`}>
             Claude Code, ChatGPT, Antigravity and Gemini share one briefing. Each reads it the moment it starts and logs what it did when it
             stops, so you never explain the project twice.
           </p>
-          <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3 max-w-4xl">
+          <div className={`${isDemo ? "mt-3" : "mt-6"} grid grid-cols-2 lg:grid-cols-4 gap-3 max-w-4xl`}>
             {TOOLS.map((t) => {
               const agent = agents.find((a) => a.tool === t.id && !a.revoked);
               const live = !!agent?.last_seen_at;
@@ -100,6 +102,16 @@ export const ContextView: React.FC<{ roomId: string }> = ({ roomId }) => {
       <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_440px]">
         {/* Progress log */}
         <div className="overflow-y-auto px-10 py-7 space-y-6">
+          {demoRoomId && demoRoomId !== roomId && onOpenDemo && (
+            <button onClick={onOpenDemo} className="w-full baton-lift rounded-3xl border border-[#6366F1]/40 bg-[#6366F1]/10 px-5 py-4 flex items-center justify-between text-left">
+              <span>
+                <span className="block text-[15px] font-semibold text-[#E6E7EB]">Watch the live demo</span>
+                <span className="block text-[12px] text-[#8B8FA3]">Four AIs plan a trip together without anyone re-explaining.</span>
+              </span>
+              <ArrowRight className="w-5 h-5 text-[#818CF8]" />
+            </button>
+          )}
+          <DemoChat roomId={roomId} />
           <form onSubmit={save} className="baton-lift rounded-3xl border border-[#2A2D37] bg-[#111217] p-5 space-y-3">
             <div className="text-[13px] font-semibold text-[#E6E7EB]">Leave a note for the next AI</div>
             <textarea

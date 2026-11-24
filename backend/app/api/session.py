@@ -51,7 +51,10 @@ def local_session(db: Session = Depends(get_db)) -> dict:
 
     if not get_settings().baton_local_mode:
         raise not_found("Local mode is off.")
+    from app.services import demo as demo_svc
+
     user, room = bootstrap.ensure_local_workspace(db)
+    demo_svc.ensure_demo_room(db, user)
     return {**_issue(db, user), "room_id": str(room.id)}
 
 
