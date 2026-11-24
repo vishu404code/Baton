@@ -148,7 +148,7 @@ function ProviderCard({ p, onChanged }: { p: ProviderInfo; onChanged: () => void
   );
 }
 
-export const ModelsView: React.FC = () => {
+export const ModelsView: React.FC<{ roomId?: string | null }> = ({ roomId }) => {
   const qc = useQueryClient();
   const { data, isLoading, error } = useQuery<{ providers: ProviderInfo[]; connect: ConnectTool[] }>({
     queryKey: ['providers'],
@@ -163,11 +163,11 @@ export const ModelsView: React.FC = () => {
     <div className="h-full flex flex-col">
       <div className="px-6 py-4 border-b border-[#2A2D37] bg-[#111217]">
         <div className="flex items-center gap-2 text-sm font-semibold text-[#E6E7EB]">
-          <Cpu className="w-4 h-4 text-[#6366F1]" /> AI Models
+          <Cpu className="w-4 h-4 text-[#6366F1]" /> Tools &amp; API keys
         </div>
         <p className="text-[11px] text-[#8B8FA3] mt-1">
-          Add a key for each AI you want on your team. Keys stay on this computer. Then create an agent for it
-          in <b>Members &amp; Agents</b>, and press <b>Run</b> on a task.
+          Your AI tools connect to Baton over MCP and share one context. API keys are an optional extra: add a key and Baton can run that AI
+          itself (create it under <b>Tasks</b> → Run).
         </p>
       </div>
 
@@ -175,6 +175,17 @@ export const ModelsView: React.FC = () => {
         {isLoading && <div className="text-xs text-[#8B8FA3]">Loading…</div>}
         {error && <div className="text-xs text-[#EF4444]">{(error as Error).message}</div>}
 
+        <div className="rounded-2xl border border-[#2A2D37] bg-[#111217] p-4 text-xs space-y-2">
+          <div className="font-semibold text-[#E6E7EB]">Connected over MCP (automatic)</div>
+          <div className="text-[#8B8FA3] leading-relaxed">
+            Claude Code, Codex (ChatGPT app), Antigravity and Gemini CLI are wired to <code className="text-[#E6E7EB]">{api.getBaseUrl()}/mcp</code>.
+            Each one reads the shared briefing when it starts (<code className="text-[#E6E7EB]">get_handoff</code>) and logs its progress when it
+            stops (<code className="text-[#E6E7EB]">save_context</code>), so you never re-explain anything when you switch tools. Watch it live on the
+            Context screen.
+          </div>
+        </div>
+
+        <div className="text-xs font-semibold uppercase tracking-wider text-[#8B8FA3]">API keys (optional: Baton runs the AI for you)</div>
         <div className="grid gap-4">
           {data?.providers.map((p) => (
             <ProviderCard key={p.id} p={p} onChanged={refresh} />

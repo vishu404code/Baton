@@ -29,6 +29,7 @@ from app.models import Agent, Claim, Comment, Record, Room, User, utcnow
 from app.record_views import based_on_out, comment_out, revision_out, sources_out
 from app.serializers import actor_agent, agent_out
 from app.services import claims as claim_svc
+from app.services import context as context_svc
 from app.services import ledger
 from app.services import presence
 from app.services import submissions as submission_svc
@@ -297,7 +298,40 @@ def _submit(db, agent, task_id, content, based_on, sources, idempotency_key, tit
     return submission_svc.submit(db, agent, task_id, content, based_on, sources, idempotency_key, title)
 
 
+def _get_handoff(db: Session, agent: Agent) -> dict:
+    room = db.get(Room, agent.room_id)
+    return context_svc.build_handoff(db, room, for_name=agent.name)
+
+
+def _save_context(db: Session, agent: Agent, summary: str, next_steps: str | None, files: list[str] | None, kind: str) -> dict:
+    if not (summary or "").strip():
+        raise AgentError("bad_request", "summary is empty: write one or two sentences about what you did.")
+    owner = db.get(User, agent.user_id).display_name
+    e = context_svc.save_entry(
+        db, agent.room_id, author=agent.name, tool=agent.tool, summary=summary, next_steps=next_steps,
+        files=files, kind=kind, actor=actor_agent(agent, owner),
+    )
+    return {"saved": True, "entry_id": str(e.id), "message": "Saved. The next AI tool will see this in get_handoff."}
+
+
 # --- Tool definitions ----------------------------------------------------------------------
+
+
+@server.tool()
+async def get_handoff(ctx: Context) -> dict:
+    """Call this FIRST in every conversation. Returns a briefing (markdown) of the project goal, the binding
+    decisions, the tasks and results so far, and what other AI tools did recently and suggest doing next.
+    Continue from it instead of asking the user to re-explain."""
+    return await _run(ctx, _get_handoff)
+
+
+@server.tool()
+async def save_context(ctx: Context, summary: str, next_steps: str | None = None, files: list[str] | None = None, kind: str = "progress") -> dict:
+    """Record what you just did so the next AI tool can continue from exactly here. Call it when you finish a
+    meaningful chunk of work, make a decision, hit a blocker, or when the user says they are switching tools.
+    summary: 1-3 sentences. next_steps: what should happen next. files: paths you touched.
+    kind: progress | decision | question | note."""
+    return await _run(ctx, _save_context, summary, next_steps, files, kind)
 
 
 @server.tool()

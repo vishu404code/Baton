@@ -18,6 +18,7 @@ import {
   ProviderInfo,
   ConnectTool,
   RunStatus,
+  ContextEntry,
 } from './types';
 import * as mockData from '../mocks/mockData';
 
@@ -471,6 +472,19 @@ class ApiClient {
   async getRecovery(roomId: string): Promise<RecoveryResponse> {
     const res = await this.request<any>(`/api/rooms/${roomId}/recovery`);
     return this.isMockMode ? res : adaptRecovery(res);
+  }
+
+  // --- Shared context across AI tools ---
+
+  async getContext(roomId: string): Promise<{ entries: ContextEntry[]; handoff_markdown: string }> {
+    return this.request(`/api/rooms/${roomId}/context`);
+  }
+
+  async addContextNote(roomId: string, summary: string, next_steps?: string): Promise<ContextEntry> {
+    return this.request(`/api/rooms/${roomId}/context`, {
+      method: 'POST',
+      body: JSON.stringify({ summary, ...(next_steps ? { next_steps } : {}) }),
+    });
   }
 
   // --- AI models & running agents ---

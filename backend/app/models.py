@@ -267,3 +267,19 @@ class Event(Base):
     # Record IDs this event touches, for GET /events?record_id= filtering.
     record_ids: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = _ts()
+
+
+class ContextEntry(Base):
+    """Shared progress log: what each AI tool (or the user) did and what should happen next.
+    Every connected tool reads this at the start (get_handoff) and writes to it when it finishes."""
+
+    __tablename__ = "context_entries"
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    room_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"), index=True)
+    author: Mapped[str] = mapped_column(String(80))
+    tool: Mapped[str] = mapped_column(String(24))  # claude_code | codex | antigravity | gemini_cli | user | other
+    kind: Mapped[str] = mapped_column(String(16), default="progress")  # progress | decision | question | note
+    summary: Mapped[str] = mapped_column(Text)
+    next_steps: Mapped[str | None] = mapped_column(Text, nullable=True)
+    files: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = _ts()

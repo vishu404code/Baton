@@ -25,6 +25,22 @@ cd desktop && npm run pack      # creates desktop/dist/mac-arm64/Baton.app
 
 Your data lives in `~/Library/Application Support/Baton/` (`data/baton.db`, `logs/`). Help → *Open data folder* shows it.
 
+## Switch between AI tools without re-explaining
+
+Baton connects Claude Code, Codex (ChatGPT app), Antigravity and Gemini CLI over MCP and gives them one shared memory.
+
+- Each tool calls **`get_handoff`** when a conversation starts: the goal, the binding decisions, the tasks and results so far, and what the *other* tools did and suggest next.
+- Each tool calls **`save_context`** when it finishes a chunk of work or you say you're switching: a summary, next steps and files touched.
+- You can add your own notes too. Everything shows live on the **Context** screen.
+
+To wire your tools on this computer (adds only the `baton` entry to each tool's MCP config plus a short standing instruction, after making a `.baton-backup` copy):
+
+```bash
+cd backend && BATON_DATA_DIR="$HOME/Library/Application Support/Baton/data" uv run --python 3.12 python -m app.tool_connect
+```
+
+Then restart each tool once so it loads the new config. Baton must be running (the desktop app) for the tools to reach it.
+
 ## Use several AIs
 
 1. **AI Models** (left menu): paste an API key for each AI you want, press **Test**, pick a model. Keys stay on this computer in a private file and are never shown again.

@@ -14,6 +14,7 @@ import { TimelineView } from './views/TimelineView';
 import { MembersView } from './views/MembersView';
 import { SettingsView } from './views/SettingsView';
 import { ModelsView } from './views/ModelsView';
+import { ContextView } from './views/ContextView';
 import { api } from './api/client';
 import { useRoomWebSocket } from './api/useWebSocket';
 import { Room, Member, Agent, Event } from './api/types';
@@ -31,7 +32,7 @@ function BatonApp() {
   const qc = useQueryClient();
   const [currentUser, setCurrentUser] = useState<{ id: string; display_name: string } | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<ActiveView>('board');
+  const [activeView, setActiveView] = useState<ActiveView>('context');
   const [isMockMode, setIsMockMode] = useState<boolean>(api.getIsMockMode());
   const [manualStaleAlert, setManualStaleAlert] = useState<{ message: string; count: number } | null>(null);
 
@@ -228,7 +229,8 @@ function BatonApp() {
                 currentUserId={currentUser.id}
               />
             )}
-            {activeView === 'models' && <ModelsView />}
+            {activeView === 'context' && selectedRoomId && <ContextView roomId={selectedRoomId} />}
+            {activeView === 'models' && <ModelsView roomId={selectedRoomId} />}
             {activeView === 'settings' && (
               <SettingsView
                 room={selectedRoom}

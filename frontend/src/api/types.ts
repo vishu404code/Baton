@@ -356,3 +356,14 @@ export interface RunStatus {
   steps?: Array<{ task: string; agent?: string; status: string; message?: string }>;
   seconds?: number;
 }
+
+export interface ContextEntry {
+  id: string;
+  author: string;
+  tool: 'claude_code' | 'codex' | 'antigravity' | 'gemini_cli' | 'user' | 'other' | string;
+  kind: string;
+  summary: string;
+  next_steps: string | null;
+  files: string[];
+  created_at: string;
+}

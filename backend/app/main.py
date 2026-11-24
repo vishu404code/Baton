@@ -12,7 +12,7 @@ from starlette.routing import Route
 
 from app import __version__
 from app import logging_filters, ws
-from app.api import agents, approvals, evidence, providers, records, rooms, runs, session
+from app.api import agents, approvals, context, evidence, providers, records, rooms, runs, session
 from app.config import get_settings
 from app.db import SessionLocal, db_ok, init_db
 from app.errors import install_error_handlers
@@ -74,7 +74,7 @@ app.add_middleware(
 )
 install_error_handlers(app)
 
-for module in (session, rooms, agents, records, approvals, evidence, providers, runs, ws):
+for module in (session, rooms, agents, records, approvals, evidence, providers, runs, context, ws):
     app.include_router(module.router)
 
 # MCP over Streamable HTTP, for agents. Both /mcp and /mcp/ work (no redirect for POST).

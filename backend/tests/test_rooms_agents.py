@@ -169,7 +169,7 @@ def test_create_agent_returns_token_once_and_snippets(api, client, db):
     assert 'bearer_token_env_var = "BATON_TOKEN"' in snips["codex"]["config_toml"]
     assert snips["codex"]["env"] == f"export BATON_TOKEN={token}"
     assert f'"httpUrl": "{MCP_URL}"' in snips["gemini_cli"]["settings_json"]
-    assert "get_room_context" in body["config"]["instructions_md"]
+    assert "get_handoff" in body["config"]["instructions_md"]
 
     # The config endpoint can't know the token, so it uses the placeholder.
     cfg = client.get(f"/api/rooms/{room['id']}/agents/{agent['id']}/config", headers=asha["h"]).json()

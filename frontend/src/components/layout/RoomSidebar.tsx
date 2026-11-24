@@ -8,12 +8,16 @@ import {
   Users,
   Settings,
   Cpu,
+  Layers,
+  Sun,
+  Moon,
   ChevronDown,
   Copy,
   Check,
   FileCheck,
 } from 'lucide-react';
 import { Room, Role } from '../../api/types';
+import { applyTheme, getTheme, Theme } from '../../lib/theme';
 
 export type ActiveView =
   | 'board'
@@ -23,6 +27,7 @@ export type ActiveView =
   | 'recovery'
   | 'verification'
   | 'members'
+  | 'context'
   | 'models'
   | 'settings';
 
@@ -43,6 +48,12 @@ export const RoomSidebar: React.FC<RoomSidebarProps> = ({
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [theme, setThemeState] = useState<Theme>(getTheme());
+  const toggleTheme = () => {
+    const next: Theme = theme === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    setThemeState(next);
+  };
 
   const copyInviteCode = () => {
     if (!room) return;
@@ -59,57 +70,10 @@ export const RoomSidebar: React.FC<RoomSidebarProps> = ({
     badge?: number;
     badgeColor?: string;
   }> = [
-    {
-      id: 'board',
-      label: 'Board',
-      icon: <LayoutGrid className="w-4 h-4" />,
-      badge: room?.counts?.stale ? room.counts.stale : undefined,
-      badgeColor: 'bg-[#F59E0B] text-black font-semibold',
-    },
-    {
-      id: 'timeline',
-      label: 'Timeline',
-      icon: <History className="w-4 h-4" />,
-    },
-    {
-      id: 'decisions',
-      label: 'Decisions',
-      icon: <GitBranch className="w-4 h-4" />,
-    },
-    {
-      id: 'trace',
-      label: 'Trace',
-      icon: <FileCheck className="w-4 h-4" />,
-    },
-    {
-      id: 'recovery',
-      label: 'Recovery',
-      icon: <RotateCcw className="w-4 h-4" />,
-    },
-    {
-      id: 'verification',
-      label: 'Verification',
-      icon: <CheckCircle2 className="w-4 h-4" />,
-      badge: room?.counts?.pending_approvals ? room.counts.pending_approvals : undefined,
-      badgeColor: 'bg-[#6366F1] text-white',
-    },
-    {
-      id: 'members',
-      label: 'Members & Agents',
-      icon: <Users className="w-4 h-4" />,
-      badge: room?.counts?.agents ? room.counts.agents : undefined,
-      badgeColor: 'bg-[#1D1F27] border border-[#2A2D37] text-[#8B8FA3]',
-    },
-    {
-      id: 'models',
-      label: 'AI Models',
-      icon: <Cpu className="w-4 h-4" />,
-    },
-    {
-      id: 'settings',
-      label: 'Settings',
-      icon: <Settings className="w-4 h-4" />,
-    },
+    { id: 'context', label: 'Context', icon: <Layers className="w-4 h-4" /> },
+    { id: 'board', label: 'Tasks', icon: <LayoutGrid className="w-4 h-4" />, badge: room?.counts?.stale ? room.counts.stale : undefined, badgeColor: 'bg-[#F59E0B] text-black font-semibold' },
+    { id: 'decisions', label: 'Project', icon: <GitBranch className="w-4 h-4" /> },
+    { id: 'models', label: 'Tools & keys', icon: <Cpu className="w-4 h-4" /> },
   ];
 
   return (
@@ -203,7 +167,7 @@ export const RoomSidebar: React.FC<RoomSidebarProps> = ({
         <div className="w-8 h-8 rounded-full bg-[#6366F1]/20 border border-[#6366F1]/40 flex items-center justify-center font-bold text-xs text-[#6366F1]">
           {currentUser?.display_name ? currentUser.display_name[0].toUpperCase() : 'U'}
         </div>
-        <div className="truncate">
+        <div className="truncate flex-1">
           <div className="text-xs font-medium text-[#E6E7EB] truncate">
             {currentUser?.display_name || 'Anonymous'}
           </div>
@@ -211,6 +175,13 @@ export const RoomSidebar: React.FC<RoomSidebarProps> = ({
             {myRole}
           </div>
         </div>
+        <button
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          className="w-8 h-8 rounded-lg border border-[#2A2D37] bg-[#16171D] text-[#8B8FA3] hover:text-[#E6E7EB] hover:border-[#6366F1] flex items-center justify-center transition-colors"
+        >
+          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        </button>
       </div>
     </aside>
   );

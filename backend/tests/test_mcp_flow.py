@@ -50,9 +50,9 @@ def test_tool_list_and_instructions(world, live_server):
     names, instructions = anyio.run(go)
     assert names == sorted([
         "get_room_context", "list_tasks", "read_record", "claim_task", "heartbeat",
-        "submit_result", "release_task", "add_source", "comment",
+        "submit_result", "release_task", "add_source", "comment", "get_handoff", "save_context",
     ])
-    assert "get_room_context first" in (instructions or "")
+    assert "get_handoff" in (instructions or "") and "save_context" in (instructions or "")
 
 
 def test_full_task_and_handoff_over_mcp(world, live_server, client):
