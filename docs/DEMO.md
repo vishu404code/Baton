@@ -19,6 +19,17 @@
    docker compose exec backend python scripts/demo_run.py --pause 2
    ```
 
+## Live moments (one command each, while the UI is open)
+
+```bash
+./scripts/live_demo.sh handoff    # Claude drafts Task 1, Codex reviews it (Task 2)
+./scripts/live_demo.sh decision   # Decision 2 → 15 January: plan and review go stale, rota stays green
+./scripts/live_demo.sh redo       # optional: old-decision submit rejected, corrected plan waits for approval
+./scripts/live_demo.sh crash      # crash after save, retry, applied exactly once
+```
+
+Scripted agents over the real MCP endpoint; run them in this order after `./reset-demo.sh -y`.
+
 ## The script
 
 | Time | Do | Audience sees | Proves |
