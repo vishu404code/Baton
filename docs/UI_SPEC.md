@@ -1,4 +1,6 @@
-# Baton UI Spec (v1)
+# Baton UI Spec (v2)
+
+> **v2 in one line:** rooms nest into a tree, there's a Memory screen, agents show their harness and model, `baton-connect` is the recommended way to connect, and the stale preview includes child rooms. Every new or changed part is marked **(v2)**; §7 has the new screens in full.
 
 This is for the frontend team (built in Google Antigravity, in `frontend/`). The backend never touches `frontend/`. All data comes from `docs/API_CONTRACT.md`, and section numbers like "API §6" refer to that file.
 
@@ -62,17 +64,23 @@ The judges must be able to see **six things** on screen: two different tools con
 ```
 
 ### 2.1 Left rail (72 px)
+
+> **(v2)** The rail shows **root rooms only** (`GET /api/rooms/tree` → `trees`). Child rooms live in the sidebar tree (§2.2). The amber/red dots aggregate the whole tree. **＋ Create room** gains an optional "Inside…" parent picker (only rooms where you're owner/mentor; greyed out at depth 3).
 - One round icon per room (`GET /api/rooms`), showing the room's initials. The selected room has an indigo pill on the left edge. Show a small amber dot if `counts.stale > 0`, and a red dot if `counts.pending_approvals > 0`.
 - **＋ Create room** opens a dialog asking for a name (`POST /api/rooms`), then switches to the new room.
 - **⇥ Join with code** opens a dialog asking for an invite code (`POST /api/rooms/join`). Show "Code not found" on 404.
 - Switching rooms closes the old WebSocket and opens the new one.
 
 ### 2.2 Room sidebar (240 px)
+
+> **(v2)** Above the nav items, show the **room tree** of the current root: nested and collapsible, indented 12 px per level. Rooms you're a member of are normal. Ancestors you can only read show a 🔒 "read only" icon and open on their Memory screen. A "＋ child room" button appears on hover for owners/mentors. The nav gains **Memory** (after Decisions) and **Inbox** (promotions and memory proposals, with a count badge).
 - Header: room name with a dropdown containing "Copy invite code" (shows `CAMPUS-7KQ2` with a copy button) and "Room settings".
 - Nav items: **Board, Timeline, Decisions, Trace, Recovery, Verification, Members & Agents, Settings**. Each shows a count badge where useful: Board shows stale count (amber), Verification shows rejected submissions in the last 10 min (red), Recovery shows interrupted items.
 - Footer: my name and room role, and a "Sign out" link that clears the session token.
 
 ### 2.3 Right panel (300 px, collapsible)
+
+> **(v2)** Agent rows show the **harness and model** under the name ("Claude Code · claude-opus-5-5"), plus a live session line when `session.status == "running"`: the last `harness.progress` text, truncated, with a spinner. Show `harness.progress` in the activity feed only for the selected agent (it's chatty).
 - **Online:** people (`presence.users`), each with their agents nested underneath. An agent row shows its badge, online dot, and either "idle" or `working on Task 1` with a lease countdown (`working_on.lease_expires_at`). Update from `presence.changed` and `task.heartbeat`.
 - **Activity:** the live feed of the room's events, newest first, using `event.summary`. Skip `task.heartbeat` and `presence.changed`. Clicking an item navigates to its record. Keep the last 200.
 
@@ -105,6 +113,8 @@ The judges must be able to see **six things** on screen: two different tools con
 - Cards move columns live on `task.claimed`, `submission.completed`, `record.stale` and `approval.decided`, with a brief highlight.
 
 ### 4.2 Task detail — tests 2, 3 and 4
+
+> **(v2)** `based_on` pills from ancestor rooms show the room name: `Campus App Launch › Decision 2 · v2`. Approved outputs in a child room get a **Promote to parent** button (owner/mentor), which opens a small dialog with category (default `note`) and title. A `request_changes` review shows a banner on the reviewed task: "Reopened: changes requested by Ben's Codex".
 `GET /api/records/{task_id}`. Open it as a wide drawer over the board, or as a full page. Either is fine.
 
 Sections, top to bottom:
@@ -124,6 +134,8 @@ Sections, top to bottom:
 10. **Evidence:** a "View trace" button that opens Trace for this task.
 
 ### 4.3 Decisions — test 4
+
+> **(v2)** Inherited decisions (from ancestor rooms) are listed in their own group, "From Campus App Launch", read-only, with a link to edit them in their room. The **Stale impact** preview groups items by room using `by_room`: "1 output stale in Campus App Launch" and "**1 output stale in Launch Week** (child room)". Child-room items get a room chip and a tree icon.
 `GET /api/rooms/{id}/records?type=brief,decision,source`
 
 - Three tabs: **Decisions** (default), **Brief**, **Sources**.
@@ -146,6 +158,8 @@ Sections, top to bottom:
 - "Who owned each step": hovering a task label highlights all its events.
 
 ### 4.5 Trace — test 6
+
+> **(v2)** Nodes from another room get a room chip, and cross-room edges are drawn dashed-indigo. New edge styles: `claimed_by` (thin indigo, revision → agent), `promoted_to` (thick green).
 `GET /api/records/{record_id}/trace`
 
 - A record picker at the top, defaulting to the most recently corrected task.
@@ -156,6 +170,8 @@ Sections, top to bottom:
 - To the right of the graph, show the **Story** panel: the `story` list as a numbered narrative, with each step linking to its Timeline `seq`. This is the "trace one corrected task back to the teammate's decision" proof, so make it readable from across a room.
 
 ### 4.6 Recovery — test 5
+
+> **(v2)** A second card type for **crashed harness sessions** (`kind: "harness_session"`): agent badge, harness and model, started/ended times, error, and the last progress text. A crashed session that held a claim shows "Lease will expire at …" or "Task released".
 `GET /api/rooms/{id}/recovery`
 
 - One card per item:
@@ -177,6 +193,8 @@ Sections, top to bottom:
 - This screen must look good on a projector: large text, generous spacing.
 
 ### 4.8 Members & Agents — tests 1 and 2
+
+> **(v2)** The agents table adds **Harness**, **Model**, **Context** ("200k · markdown") and **Connection** (`ACP` / `MCP`) columns, with an edit (pencil) action for the profile (`PATCH …/agents/{id}`). The **Connect an agent** dialog adds a harness/model step, and its first tab is **baton-connect (recommended)**: the install line and the run command, each with a copy button. The v1 snippets remain as tabs labelled "Direct MCP (fallback)". An owner's own agents get a **Private workspace** link (§7.4).
 `GET /members`, `GET /agents`
 
 - **Members table:** avatar, name, role (owner/mentor/member), online dot, and their agents. The owner gets a role dropdown (member ⇄ mentor) on other rows.
@@ -219,3 +237,50 @@ Make sure these work before anything else:
 6. Recovery shows "Applied exactly once ✓" after `crash_demo.py`.
 7. Trace shows Draft v2 → Decision 2 v2 → Asha, with the story panel.
 8. The Connect an agent dialog shows working snippets.
+
+## 7. v2 screens (v2)
+
+### 7.1 Room tree (v2)
+- In the sidebar, under the room name:
+  ```
+  ▾ Campus App Launch          (member)
+     ▸ Launch Week   ⚠1        (member, child)
+  ```
+- Clicking a room switches the main area and the WebSocket to that room. Keep the tree expansion state in `localStorage`.
+- **Create child room** dialog: name, plus parent (prefilled). On `201`, select the new room. A `room.created` event in the parent's stream adds the child live for everyone who can see it.
+- Status dots per node: amber for `counts.stale > 0`, red for pending approvals or promotions.
+
+### 7.2 Memory screen (v2)
+`GET /api/rooms/{id}/memory?include_ancestors=true`
+
+- **Header:** a search box (full-text; Enter runs `?q=`), a tag filter, and two toggles: "Include inherited" (default on) and "Show expired".
+- **Category tabs with counts:** All · Briefs · Decisions · Sources · Facts · Lessons · Glossary · Notes · **Pending** (agent proposals, mentors only).
+- **Item card:**
+  - label (mono), title, the body (3 lines, expandable), tags as chips
+  - confidence as a small bar (hidden at 1.0)
+  - an expiry countdown when `expires_at` is set
+  - provenance: "added by Asha" / "proposed by Asha's Claude (sub …)" / "promoted from Launch Week › Draft 1 v2"
+- **Inherited items:** a left border in the ancestor room's colour, a chip "from Campus App Launch", read-only (an "Open in Campus App Launch" link instead of Edit).
+- **Mentors:** **＋ Add memory** (category, title, body or term+definition, tags, optional expiry), plus **Edit**. Editing a brief, decision or source shows the same stale-impact preview as §4.3.
+- **Pending proposals:** Approve / Reject (reject needs a comment), using `POST /api/approvals/{id}/decide` (`kind: "memory"`).
+- Updates live on `memory.added`, `memory.proposed`, `revision.created` and `approval.decided`.
+
+### 7.3 Inbox (v2)
+`GET /api/rooms/{id}/promotions` and `GET /api/rooms/{id}/approvals`
+
+- **Promotions in:** each card shows the from-room chip, the child revision rendered, its `based_on` pills (with room names), the target category and title, and **Approve into this room** / **Reject**. On approval, show a toast "Added as Note 1" with a link to Memory.
+- **Promotions out** (owner/mentor of a child): status of the room's requests.
+- **Approvals:** the v1 approvals list (outputs and memory proposals), for one place to work through.
+
+### 7.4 Agent detail: profile, live session, private workspace (v2)
+- **Profile:** harness, model, context window, format, connection, all editable by the owner or mentors.
+- **Live session:** the running harness session's progress stream (`harness.progress`, ephemeral), start time, the task it's on, and a "Copy restart command" button.
+- **Context packet preview:** `GET …/context-packet?task=` rendered in a mono panel, with "used / budget tokens" and any trimmed sections. It shows exactly what the agent sees.
+- **Private workspace:** visible **only to the agent's owner** (`GET /api/agents/{id}/private`). List the keys, kind (draft/note), content and expiry. Read-only in the UI. Never show it to other members; the API returns 404 to them.
+
+### 7.5 Demo-critical additions (v2)
+1. The sidebar tree shows Campus App Launch › Launch Week.
+2. The decision preview in the parent shows "1 output stale in Launch Week".
+3. After saving, Launch Week's board turns amber live, through its own WebSocket stream.
+4. The Connect dialog's baton-connect tab, and a live harness session line in the right panel.
+5. The Memory screen with inherited items marked.

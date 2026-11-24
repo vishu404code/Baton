@@ -1,5 +1,7 @@
 # Baton Architecture and Build Plan
 
+> **v2 in progress:** see [V2_PLAN.md](V2_PLAN.md) for the SQLite, memory/state, room tree and ACP upgrade. This page describes v1 until milestone 2 lands.
+
 ## Components
 
 ```

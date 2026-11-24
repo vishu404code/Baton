@@ -1,4 +1,4 @@
-# Baton API Contract (v1)
+# Baton API Contract (v2)
 
 This is the contract between the Baton backend and the frontend. The frontend team builds against it in parallel, so **any change here must be agreed and noted in the changelog at the bottom**. FastAPI also serves live OpenAPI docs at `http://localhost:8000/docs`; if the two disagree, raise it, don't guess.
 
@@ -13,6 +13,8 @@ This is the contract between the Baton backend and the frontend. The frontend te
 ## 0. Conventions
 
 ### 0.1 Authentication
+
+> **(v2)** Agent tokens (`bat_`) are now also accepted on the harness endpoints used by `baton-connect` (§11.6) and on `GET /api/agents/me/private`. Session tokens can never read another member's agent's private workspace.
 
 There are two kinds of token. Only token hashes are stored server-side, and tokens are never logged.
 
@@ -52,6 +54,8 @@ Every error uses the same shape and a meaningful HTTP status:
 List endpoints that can grow (`events`, `submissions`) accept `limit` (default 100, max 500). Events page by `since_seq`; submissions by `before` (a timestamp). Other lists return everything.
 
 ### 0.4 Roles and permissions
+
+> **(v2)** New rules: owners and mentors of a room can create **child rooms** under it (max depth 3). A member of a room can **read** (never write) the master memory of every **ancestor** room, but sees nothing of sibling rooms. Promotion requests into a room are decided by that room's owner/mentors. An agent's **private workspace** is readable only by that agent (MCP) and its owner (REST).
 
 **Room member roles** (humans): `owner` (exactly one, the creator), `mentor`, `member`.
 
@@ -120,6 +124,8 @@ Who did something. Appears in revisions, events, claims and comments.
 
 ### 1.3 Room
 
+> **(v2)** Rooms gain `parent_id`, `root_id`, `depth` (1–3), `path` (ancestors → this room, as `[{id, name}]`), `children` (IDs of child rooms you can see) and `access`: `"member"` or `"read"` (an ancestor you can read but don't belong to). See §11.1.
+
 ```json
 {
   "id": "room_campus",
@@ -149,6 +155,8 @@ Who did something. Appears in revisions, events, claims and comments.
 
 ### 1.5 Agent
 
+> **(v2)** Agents gain `profile` (`harness`, `model`, `context_window`, `context_format`) and `session` (the live harness session or `null`). `tool` stays as in v1. See §11.2.
+
 ```json
 {
   "id": "agt_codex",
@@ -172,6 +180,8 @@ Who did something. Appears in revisions, events, claims and comments.
 - `working_on` is the task the agent holds an active claim on (or `null`).
 
 ### 1.6 Record
+
+> **(v2)** `brief`, `decision` and `source` records now live in the room's **master memory** (§11.3). They keep the same IDs, labels ("Decision 2"), revisions and shapes, and `/records` still returns them, with an extra `"store": "memory"` and, when they come from an ancestor room, `"room_id"`, `"room_name"` and `"inherited": true`. Tasks, drafts and reviews are **state** (`"store": "state"`). New task status flow: a review with verdict `request_changes` reopens the reviewed task (status `open`, event `task.reopened`).
 
 A record is a long-lived item (a brief, a decision, a task...). Its content lives in revisions.
 
@@ -311,6 +321,8 @@ A **rejected** example:
 
 ### 1.10 Approval
 
+> **(v2)** Approvals gain `kind`: `"output"` (v1 behaviour) or `"memory"` (an agent's `add_memory` proposal waiting for a human). Promotions from child rooms use their own object and endpoints (§11.5).
+
 ```json
 {
   "id": "apr_2",
@@ -418,6 +430,8 @@ Request
 
 ### `POST /api/rooms`
 
+> **(v2)** Optional `parent_id` creates a **child room** (caller must be owner/mentor of the parent; depth ≤ 3; `409` beyond). Emits `room.created` in the new room **and** in the parent.
+
 Creates a room. The caller becomes `owner`.
 
 Request
@@ -428,6 +442,8 @@ Request
 `201 Created` → **Room** (1.3). An `event` of type `member.joined` (the owner) is the room's first event.
 
 ### `GET /api/rooms`
+
+> **(v2)** Unchanged list of rooms you belong to; each item adds `parent_id` and `depth`. Use `GET /api/rooms/tree` (§11.1) for the nested sidebar.
 
 The rooms I belong to, for the left rail.
 
@@ -445,6 +461,8 @@ The rooms I belong to, for the left rail.
 `200 OK` → **Room** (1.3).
 
 ### `POST /api/rooms/join`
+
+> **(v2)** Joining a child room also grants **read** access to its ancestors' master memory (not membership, not their tasks).
 
 Request
 ```json
@@ -499,6 +517,8 @@ Revoked agents are omitted unless you pass `?include_revoked=true`.
 
 ### `POST /api/rooms/{room_id}/agents`
 
+> **(v2)** Optional `profile` in the body (§11.2). Defaults are filled from `tool`.
+
 Creates an agent owned by the caller. **The token is returned only in this response.** Show it once, with a copy button and a warning.
 
 Request
@@ -518,6 +538,8 @@ Request
 Emits `agent.created`. Any room member can create agents (with any role) for themselves; the agent belongs to the caller.
 
 ### `GET /api/rooms/{room_id}/agents/{agent_id}/config`
+
+> **(v2)** `snippets` gains a `baton_connect` entry (shown first in the dialog), and the response gains `profile`. See §11.6.
 
 Ready-to-paste connection snippets. Because the server only stores the token hash, this endpoint uses the placeholder `<BATON_TOKEN>`. The create response fills in the real token.
 
@@ -564,6 +586,8 @@ Revokes the agent's token. Its active claims are released.
 ## 6. Records
 
 ### `GET /api/rooms/{room_id}/records`
+
+> **(v2)** New query parameter `include_ancestors` (default `false` here, for v1 compatibility). With `true`, ancestor rooms' briefs, decisions and sources are included and marked `inherited: true`.
 
 Query parameters (all optional):
 - `type`: comma-separated, e.g. `decision,source`
@@ -659,6 +683,8 @@ Emits `revision.created`, plus `task.created` for tasks.
 
 ### `POST /api/records/{record_id}/revisions`
 
+> **(v2)** Stale propagation now **crosses the room tree**: changing a decision in a parent room flags dependent outputs in child rooms too. Each `stale`/`unaffected` item gains `room_id`, `room_name` and `in_child_room`, and the response gains `by_room` (§11.4). Editing an **inherited** record from a child room returns `403`; edit it in the room that owns it.
+
 Owner/mentor. Edits a `brief`, `decision`, `task` or `source` by appending a new revision (nothing is overwritten). **Editing a decision, brief or source triggers stale propagation.**
 
 Request
@@ -689,6 +715,8 @@ Request
 Emits `revision.created`, `decision.changed` (decisions only), and one `record.stale` per stale record.
 
 ### `POST /api/records/{record_id}/revisions/preview`
+
+> **(v2)** Also lists child-room outputs, and adds `by_room`: `[{"room_id", "room_name", "count", "text": "1 output stale in Launch Week"}]`.
 
 Owner/mentor. Same body as above. **Writes nothing** and returns what would go stale. Call it as the mentor edits (debounced) to show the warning before saving.
 
@@ -732,6 +760,8 @@ Query parameters: `task_id`, `status` (comma-separated), `agent_id`, `limit`, `b
 `200 OK` → **Submission**.
 
 ### `GET /api/rooms/{room_id}/approvals`
+
+> **(v2)** Items include `kind` (`output` | `memory`). Promotions are listed separately at `GET /api/rooms/{room_id}/promotions`.
 
 Query parameter: `status=pending` (default) | `approved` | `rejected` | `all`.
 
@@ -783,6 +813,8 @@ Query parameters:
 
 ### `GET /api/records/{record_id}/trace`
 
+> **(v2)** New edge `claimed_by` (output revision → the agent that held the task when it was written). Nodes from other rooms carry `room_id` and `room_name`, and edges can cross rooms (a child draft based on a parent decision), plus `promoted_to` (child revision → parent memory item).
+
 Builds the evidence graph from an output (or a task, which uses its output) back through `based_on` to the decisions, sources and people behind it, including superseded revisions. Optional `?revision=N`.
 
 `200 OK`
@@ -831,6 +863,8 @@ Builds the evidence graph from an output (or a task, which uses its output) back
 - `story` is the chronological, human-readable trace, with `seq` linking to Timeline events.
 
 ### `GET /api/rooms/{room_id}/recovery`
+
+> **(v2)** Also lists harness sessions that **crashed** (from `baton-connect`): items with `kind: "harness_session"`, alongside the v1 `kind: "submission"` items.
 
 Submissions that were interrupted (saved but not completed), and those that were resumed by a retry, with proof they were applied once.
 
@@ -964,6 +998,15 @@ Every event has the envelope from 1.12. These are the `payload` fields per `type
 | `approval.requested` | `{ "approval": Approval }` | Corrected or new work is waiting for a human |
 | `approval.decided` | `{ "approval": Approval, "decided_by": Actor }` | Approved or rejected |
 | `comment.added` | `{ "comment": Comment, "record": RecordRef }` | Human or agent comment |
+| `room.created` **(v2)** | `{ "room": Room, "parent": {id, name} \| null }` | A room was created; also sent to the parent room's stream for a child |
+| `memory.added` **(v2)** | `{ "item": MemoryItem, "room": {id, name} }` | A memory item reached the master (mentor-authored, approved proposal, or approved promotion) |
+| `memory.proposed` **(v2)** | `{ "item": MemoryItem, "approval": Approval }` | An agent's `add_memory` passed its checks and waits for approval |
+| `promotion.requested` **(v2)** | `{ "promotion": Promotion }` | A child room's verified work asks to enter this (parent) room's master. Sent to both rooms. |
+| `promotion.decided` **(v2)** | `{ "promotion": Promotion, "decided_by": Actor }` | The parent mentor approved or rejected it. Sent to both rooms. |
+| `task.reopened` **(v2)** | `{ "task": RecordRef, "review": RecordRef, "reason": "request_changes" }` | A reviewer asked for changes, so the reviewed task is open again |
+| `harness.session_started` **(v2)** | `{ "session": HarnessSession, "agent": Actor }` | `baton-connect` started a harness (Claude Code, Codex, Gemini CLI, OpenCode) |
+| `harness.session_ended` **(v2)** | `{ "session": HarnessSession, "agent": Actor, "status": "ended" \| "crashed", "reason": "..." }` | The harness finished or crashed (crashes also appear in Recovery) |
+| `harness.progress` **(v2)** | `{ "session_id", "agent": Actor, "kind": "message" \| "tool_call" \| "plan", "text": "..." }` | Live progress from a harness. **Ephemeral** like `presence.changed` (`seq: null`). |
 
 **Example: an agent submits work based on an old decision.** The room receives this sequence in order:
 
@@ -993,6 +1036,12 @@ The frontend doesn't call these, but every UI state is caused by them. Served at
 | `release_task` | `task_id` | OK |
 | `add_source` | `title`, `url_or_text` | The new source record and its `revision_id` |
 | `comment` | `record_id`, `text` | The comment |
+| `search_memory` **(v2)** | `query?`, `category?`, `tags?`, `include_ancestors` (default `true`) | Matching master memory items (FTS5 text search), each with `revision_id` to cite, `room_name` and `inherited` |
+| `save_private` **(v2)** | `key`, `content`, `expires_in_minutes?` (default 1440) | Saved to **your private workspace** only. Never visible to the room, never makes anything stale. |
+| `read_private` **(v2)** | `key?` (omit to list) | Your private notes and drafts |
+| `add_memory` **(v2)** | `category` (`fact` \| `lesson` \| `glossary` \| `note`), `title`, `body`, `tags?`, `sources?`, `confidence?`, `idempotency_key` | Runs checks (permission, sources exist, content), then becomes a master memory item, waiting for approval if the room requires it. Brief, decisions and sources stay mentor-only. |
+
+**(v2)** `get_room_context` also returns `room.path` (ancestors → this room), `inherited_decisions` (from ancestor rooms, each with `room_name` and `revision_id`), `memory_highlights` (recent facts and lessons), and `others_working` (`[{agent, tool, task, since}]` for every other agent holding a claim in this room). `claim_task` returns a **context packet** sized for the calling agent's profile (§11.7).
 
 Errors are short and actionable, e.g.:
 - `stale: based on Decision 2 v1, now v2; call read_record("Decision 2") and resubmit with the new revision_id.`
@@ -1001,11 +1050,391 @@ Errors are short and actionable, e.g.:
 
 ---
 
-## 11. Changelog
+## 11. v2 additions
 
-- **v1 (2026-11-24)**: initial contract (milestone 1).
+Everything in this section is new in v2. v1 endpoints keep working unchanged, apart from the extra fields marked **(v2)** above.
+
+### 11.1 Room tree (v2)
+
+Rooms form trees, like Discord categories: **Campus App Launch** → **Launch Week** → (one more level allowed). A child room:
+- **reads** its ancestors' master memory (brief, decisions, sources, facts…), marked `inherited`
+- **writes** only its own master
+- sends work **up** only through a verified submission plus a parent mentor's approval (a promotion, §11.5)
+- has its own invite code; joining it gives read access to its ancestors, never to its siblings
+
+**Room (v2 fields)**
+
+```json
+{
+  "id": "room_week",
+  "name": "Launch Week",
+  "parent_id": "room_campus",
+  "root_id": "room_campus",
+  "depth": 2,
+  "path": [{ "id": "room_campus", "name": "Campus App Launch" }, { "id": "room_week", "name": "Launch Week" }],
+  "children": [],
+  "access": "member",
+  "invite_code": "WEEK-4MTD",
+  "my_role": "owner",
+  "settings": { "...": "as v1" },
+  "counts": { "...": "as v1" },
+  "latest_seq": 12,
+  "created_at": "2026-11-24T09:10:00Z"
+}
+```
+
+#### `POST /api/rooms` with `parent_id` (v2)
+
+Request
+```json
+{ "name": "Launch Week", "parent_id": "room_campus" }
+```
+`201 Created` → **Room** (with `depth: 2`). `403` if you're not owner/mentor of the parent. `409` `"Rooms can be nested at most 3 deep."` Emits `room.created` in both rooms.
+
+#### `GET /api/rooms/tree` (v2)
+
+Everything the nested sidebar needs: every room you belong to, plus its ancestors (as `access: "read"` if you're not a member of them). Siblings you don't belong to are not included.
+
+`200 OK`
+```json
+{
+  "trees": [
+    {
+      "id": "room_campus", "name": "Campus App Launch", "access": "member", "my_role": "owner", "depth": 1,
+      "counts": { "stale": 0, "pending_approvals": 1, "pending_promotions": 1 },
+      "children": [
+        {
+          "id": "room_week", "name": "Launch Week", "access": "member", "my_role": "owner", "depth": 2,
+          "counts": { "stale": 1, "pending_approvals": 0, "pending_promotions": 0 },
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 11.2 Agent profiles (v2)
+
+```json
+{
+  "id": "agt_claude",
+  "name": "Asha's Claude",
+  "tool": "claude_code",
+  "role": "planner",
+  "profile": {
+    "harness": "claude_code",
+    "model": "claude-opus-5-5",
+    "context_window": 200000,
+    "context_format": "markdown",
+    "connection": "acp"
+  },
+  "session": {
+    "id": "hs_1", "status": "running", "harness": "claude_code", "model": "claude-opus-5-5",
+    "task_label": "Task 1", "started_at": "2026-11-24T10:04:50Z", "last_update_at": "2026-11-24T10:05:02Z"
+  },
+  "...": "other v1 Agent fields"
+}
+```
+
+- `harness` is one of `claude_code`, `codex`, `gemini_cli`, `opencode`, `cursor` or `other`.
+- `connection` is either:
+  - `acp`: `baton-connect` started the harness, so Baton sees its session.
+  - `mcp`: the v1 direct path, where the agent was configured by hand.
+- `context_format` is `markdown` or `json`.
+- Defaults come from `tool`:
+
+  | tool | default context window |
+  |---|---|
+  | claude_code | 200,000 |
+  | codex | 272,000 |
+  | gemini_cli | 1,000,000 |
+  | opencode | 128,000 |
+  | anything else | 32,000 |
+
+#### `PATCH /api/rooms/{room_id}/agents/{agent_id}` (v2)
+
+The agent's owner or a mentor can change its `name`, `role` or `profile`.
+
+Request
+```json
+{ "profile": { "model": "gpt-6-luna", "context_window": 272000, "context_format": "json" } }
+```
+`200 OK` → **Agent**.
+
+### 11.3 Memory (v2)
+
+The **master memory** is long-term knowledge every agent in the room (and its child rooms) reads for context. Nothing in it is ever overwritten; every change is a new revision, as in the v1 ledger.
+
+**Categories**
+
+| category | label | `content` shape | Who writes it |
+|---|---|---|---|
+| `brief` | Brief N | `{ "body" }` | mentors |
+| `decision` | Decision N | `{ "statement", "rationale?" }` | mentors |
+| `source` | Source N | `{ "url?", "text?", "summary?" }` | mentors and agents (`add_source`, as v1) |
+| `fact` | Fact N | `{ "body" }` | mentors, agents via `add_memory` |
+| `lesson` | Lesson N | `{ "body" }` | mentors, agents via `add_memory` |
+| `glossary` | Term N | `{ "term", "definition" }` | mentors, agents via `add_memory` |
+| `note` | Note N | `{ "body" }` | mentors, agents via `add_memory`, promotions |
+
+**MemoryItem**
+
+```json
+{
+  "id": "mem_dec2",
+  "room_id": "room_campus",
+  "room_name": "Campus App Launch",
+  "inherited": true,
+  "category": "decision",
+  "number": 2,
+  "label": "Decision 2",
+  "title": "Launch date",
+  "body": "We launch on 15 January. — Exams end 12 January.",
+  "content": { "statement": "We launch on 15 January.", "rationale": "Exams end 12 January." },
+  "tags": ["dates", "launch"],
+  "status": "approved",
+  "confidence": 1.0,
+  "expires_at": null,
+  "provenance": {
+    "added_by": { "kind": "user", "id": "usr_asha", "name": "Asha", "room_role": "owner" },
+    "submission_id": null,
+    "promoted_from": null
+  },
+  "current_revision": 2,
+  "current_revision_id": "rev_dec2_v2",
+  "created_at": "2026-11-24T09:01:00Z",
+  "updated_at": "2026-11-24T10:42:07Z"
+}
+```
+
+- `body` is a plain-text rendering for display and search. `content` keeps the category shape, and v1 shapes are unchanged.
+- `status` is one of:
+  - `approved`: in the master.
+  - `pending`: an agent proposal waiting for approval.
+  - `expired`: `expires_at` has passed. Expired items are hidden from searches unless `include_expired=true`.
+- `confidence` runs from 0 to 1. Mentor-authored items are 1.0; agent proposals default to 0.7.
+- `inherited` is `true` when the item belongs to an ancestor room.
+
+#### `GET /api/rooms/{room_id}/memory` (v2)
+
+Query parameters:
+- `category`: comma-separated
+- `tag`
+- `q`: full-text search over title and body (SQLite FTS5; supports prefix `launch*` and phrases `"term starts"`)
+- `include_ancestors`: default `true`
+- `include_expired`: default `false`
+- `status`: default `approved`; use `pending` or `all`
+
+`200 OK`
+```json
+{
+  "items": [ { "...": "MemoryItem, own room first, then ancestors nearest-first; within each, by category then number" } ],
+  "counts": { "brief": 1, "decision": 3, "source": 3, "fact": 2, "lesson": 1, "glossary": 2, "note": 0 }
+}
+```
+
+#### `GET /api/memory/{item_id}` (v2)
+
+`200 OK` → `{ "item": MemoryItem, "revisions": [Revision…], "dependents": [ {record_id, label, room_name, status} ] }`. Readable by members of the item's room and of its descendants.
+
+#### `POST /api/rooms/{room_id}/memory` (v2)
+
+Owner/mentor. Creates an item at revision 1 (status `approved`). For `brief`, `decision` and `source`, this is the same as `POST /api/rooms/{room_id}/records`.
+
+Request
+```json
+{ "category": "fact", "title": "Term start", "content": { "body": "Spring term starts 13 January." }, "tags": ["dates"], "expires_at": null }
+```
+`201 Created` → `{ "item": MemoryItem, "revision": Revision }`. Emits `memory.added`.
+
+#### `POST /api/memory/{item_id}/revisions` and `…/revisions/preview` (v2)
+
+Same bodies and responses as `POST /api/records/{id}/revisions` and its preview (decisions here **are** those records), including cross-room stale propagation (§11.4). `403` if the item is inherited; edit it in its own room.
+
+### 11.4 Cross-room stale preview (v2)
+
+Changing **Decision 2** in *Campus App Launch* also flags the draft in *Launch Week* that was based on it.
+
+`POST /api/records/{decision_id}/revisions/preview` → `200 OK`
+```json
+{
+  "would_go_stale": [
+    { "record_id": "rec_draft1", "label": "Draft 1", "type": "draft", "title": "Launch plan", "revision": 1,
+      "task_id": "rec_task1", "task_label": "Task 1", "room_id": "room_campus", "room_name": "Campus App Launch",
+      "in_child_room": false, "reason": "based on Decision 2 v1, now v2", "path": ["Decision 2 v1", "Draft 1 v1"] },
+    { "record_id": "rec_w_draft1", "label": "Draft 1", "type": "draft", "title": "Launch-day run sheet", "revision": 1,
+      "task_id": "rec_w_task1", "task_label": "Task 1", "room_id": "room_week", "room_name": "Launch Week",
+      "in_child_room": true, "reason": "based on Decision 2 v1 (Campus App Launch), now v2",
+      "path": ["Campus App Launch › Decision 2 v1", "Launch Week › Draft 1 v1"] }
+  ],
+  "unaffected": [ { "...": "as v1, plus room_id / room_name / in_child_room" } ],
+  "by_room": [
+    { "room_id": "room_campus", "room_name": "Campus App Launch", "count": 1, "text": "1 output stale in Campus App Launch" },
+    { "room_id": "room_week", "room_name": "Launch Week", "count": 1, "text": "1 output stale in Launch Week" }
+  ],
+  "next_revision": 2
+}
+```
+
+Labels are per room ("Draft 1" exists in both rooms), so always show `room_name` next to a label from another room. Saving emits `decision.changed` in the parent and one `record.stale` **in each affected room's** stream.
+
+### 11.5 Promotions: child → parent (v2)
+
+A child room's work reaches the parent's master only as a **promotion**: verified in the child (and approved there if the child requires it), then approved by a parent mentor. On approval, the content is copied into the parent's master memory as a new item (category chosen by the requester, default `note`), with `provenance.promoted_from` pointing at the child revision. The child keeps its own copy.
+
+**Promotion**
+```json
+{
+  "id": "prm_1",
+  "from_room": { "id": "room_week", "name": "Launch Week" },
+  "to_room": { "id": "room_campus", "name": "Campus App Launch" },
+  "source": { "record_id": "rec_w_draft1", "label": "Draft 1", "revision": 2, "revision_id": "rev_w_draft1_v2", "type": "draft", "title": "Launch-day run sheet" },
+  "category": "note",
+  "title": "Launch-day run sheet (from Launch Week)",
+  "status": "pending",
+  "requested_by": { "kind": "user", "id": "usr_chen", "name": "Chen", "room_role": "owner" },
+  "requested_at": "2026-11-24T11:00:00Z",
+  "decided_by": null,
+  "decided_at": null,
+  "comment": null,
+  "result_item_id": null
+}
+```
+
+#### `POST /api/records/{record_id}/promote` (v2)
+
+Owner/mentor of the **child** room. Only `approved` outputs (or approved memory items) can be promoted.
+
+Request
+```json
+{ "category": "note", "title": "Launch-day run sheet (from Launch Week)" }
+```
+`201 Created` → **Promotion**. `409` if the room has no parent or the record isn't approved. Emits `promotion.requested` in both rooms.
+
+#### `GET /api/rooms/{room_id}/promotions?status=pending` (v2)
+
+Promotions **into** this room (`status`: `pending` (default) | `approved` | `rejected` | `all`). Add `direction=outgoing` for promotions **from** this room. Each item includes `revision` (the full child Revision) for review.
+
+#### `POST /api/promotions/{promotion_id}/decide` (v2)
+
+Owner/mentor of the **parent** room. Same body as approvals: `{ "decision": "approved" | "rejected", "comment" }`, where the comment is required to reject. `200 OK` → `{ "promotion": Promotion, "item": MemoryItem | null }`. Emits `promotion.decided` (both rooms) and `memory.added` (parent) on approval.
+
+### 11.6 Harness sessions and `baton-connect` (v2)
+
+`baton-connect` is a CLI that runs **on the host** (not in Docker). It starts a harness through ACP (Agent Client Protocol), passes it the Baton MCP server, sends a Baton task as the prompt, and reports progress and the session's end (or crash) back to Baton. The v1 direct MCP setup keeps working as the fallback.
+
+Install it once from the repo root:
+```bash
+uv tool install ./connector
+```
+
+**HarnessSession**
+```json
+{
+  "id": "hs_1",
+  "agent_id": "agt_claude",
+  "room_id": "room_campus",
+  "harness": "claude_code",
+  "model": "claude-opus-5-5",
+  "acp_agent": "claude-agent-acp 0.110.1",
+  "mcp_transport": "http",
+  "task_id": "rec_task1",
+  "task_label": "Task 1",
+  "status": "running",
+  "started_at": "2026-11-24T10:04:50Z",
+  "ended_at": null,
+  "stop_reason": null,
+  "error": null,
+  "updates": 14,
+  "last_update_at": "2026-11-24T10:05:02Z",
+  "last_text": "Submitting the launch plan…"
+}
+```
+
+- `status` is one of `running`, `ended` or `crashed`.
+- `mcp_transport` is `http` (Baton is passed directly) or `stdio-bridge` (the harness doesn't support HTTP MCP, so `baton-connect` bridges).
+
+#### Connector endpoints (agent token)
+
+| Endpoint | Body | Response |
+|---|---|---|
+| `POST /api/harness/sessions` | `{ "harness", "model", "acp_agent", "mcp_transport", "task": "Task 1" \| null }` | `201` HarnessSession. Emits `harness.session_started`. |
+| `POST /api/harness/sessions/{id}/updates` | `{ "kind": "message" \| "tool_call" \| "plan", "text" }` | `204`. Broadcast as ephemeral `harness.progress`, throttled to 2 per second per session. |
+| `POST /api/harness/sessions/{id}/end` | `{ "status": "ended" \| "crashed", "stop_reason": "end_turn" \| null, "error": "..." \| null }` | `200` HarnessSession. Emits `harness.session_ended`. Crashes also appear in Recovery. |
+
+A session with no update for 5 minutes is marked `crashed` with `error: "no heartbeat"`.
+
+#### `GET /api/rooms/{room_id}/harness/sessions?active=true` (v2)
+
+Members. `200 OK` → `{ "sessions": [HarnessSession…] }`.
+
+#### Config snippet (v2)
+
+`GET /api/rooms/{room_id}/agents/{agent_id}/config` adds, first in `snippets`:
+```json
+{
+  "baton_connect": {
+    "title": "baton-connect (recommended)",
+    "description": "Starts Claude Code over ACP with Baton attached and reports progress live. Run on your laptop.",
+    "install": "uv tool install ./connector",
+    "command": "baton-connect run --server http://192.168.1.20:8000 --token <BATON_TOKEN> --harness claude_code --task \"Task 1\""
+  }
+}
+```
+
+### 11.7 Context packets (v2)
+
+Baton builds the context an agent receives (from `claim_task`, or the `baton-connect` prompt) to fit the agent's profile:
+- **Order (most important first):**
+  1. the task
+  2. decisions, this room's and inherited
+  3. the brief
+  4. cited and recent sources
+  5. matching memory (facts, lessons, glossary)
+  6. what other agents are doing
+- **Size:** trimmed to `min(context_window × 0.25, 60,000)` tokens. Tokens are estimated as characters ÷ 4.
+- **Format:** `markdown` or `json`, per the profile.
+- **Never trimmed:** every item keeps its `revision_id`, so the agent can cite it in `based_on`.
+
+#### `GET /api/rooms/{room_id}/agents/{agent_id}/context-packet?task=Task%201` (v2)
+
+Owner of the agent or a mentor. Previews exactly what the agent will receive.
+
+`200 OK`
+```json
+{ "format": "markdown", "budget_tokens": 50000, "used_tokens": 3120, "trimmed": [], "packet": "# Task 1 — Write launch plan\n..." }
+```
+
+### 11.8 Private workspace (v2)
+
+Each agent has a private workspace: private state (drafts in progress) and private memory (scratch notes with an expiry). It never changes the master, never triggers stale flags, and never emits room events.
+
+#### `GET /api/agents/{agent_id}/private` (v2)
+
+**Only the agent's owner** (session token) or the agent itself (agent token). Anyone else gets `404`, even mentors.
+
+`200 OK`
+```json
+{
+  "agent_id": "agt_claude",
+  "items": [
+    { "key": "plan-outline", "kind": "draft", "content": "1. Soft launch…", "expires_at": null, "updated_at": "2026-11-24T10:03:00Z" },
+    { "key": "todo", "kind": "note", "content": "Check venue capacity", "expires_at": "2026-11-25T10:03:00Z", "updated_at": "2026-11-24T10:03:00Z" }
+  ]
+}
+```
+
+Agents use the MCP tools `save_private` and `read_private` (§10). The pattern is: **pull** context from the master, work privately, then **push** to the master only with `submit_result` or `add_memory`.
+
+## 12. Changelog
+
+Newest first.
+
+- **v2.0 (2026-11-24)**: room tree, master memory vs state, private workspaces, promotions, harness sessions via `baton-connect`, new MCP tools, new events. Every change is marked **(v2)** above and fully specified in §11. All v1 endpoints keep working.
 - **v1.5 (2026-11-24, milestone 7)**: draft/review records take their task's number (Task 2 → Review 2).
 - **v1.4 (2026-11-24, milestone 6)**: trace adds an `owned_by` edge (agent → the teammate who owns it), a `record` field ({id,label,title}) and `revision_id` on revision nodes; superseded revisions have `status: "superseded"`; a task with no output returns `root: null` plus `message`. Recovery items add `status`. Work resumed after its inputs changed is applied once and immediately marked stale (`record.stale` with `caused_by: null`).
 - **v1.3 (2026-11-24, milestone 5)**: when work goes stale, its pending approval is closed automatically (`approval.decided` with actor `system`, `status: "rejected"`, `payload.approval.automatic: true`). Editing a source also flags outputs that cite it. Stale items include `status_before`.
 - **v1.2 (2026-11-24, milestone 4)**: `presence.changed` messages have `seq: null` and `id: null` (not stored). MCP `list_tasks` also returns `claimable_by_you`.
 - **v1.1 (2026-11-24, milestone 2)**: any member may create agents for themselves (simplified rule); agent config responses include `token_included` (`true` only in the create response).
+- **v1 (2026-11-24)**: initial contract (milestone 1).
