@@ -232,6 +232,7 @@ function BatonApp() {
             {activeView === 'context' && selectedRoomId && <ContextView
                 roomId={selectedRoomId}
                 demoRoomId={rooms.find((r) => r.name.startsWith('Live demo'))?.id}
+                onOpenKeys={() => setActiveView('models')}
                 onOpenDemo={() => setSelectedRoomId(rooms.find((r) => r.name.startsWith('Live demo'))!.id)}
               />}
             {activeView === 'models' && <ModelsView roomId={selectedRoomId} />}

@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { Agent, ContextEntry } from '../api/types';
 import { formatTimeAgo } from '../lib/utils';
 import { DemoChat } from '../components/DemoChat';
+import { ChatPanel } from '../components/ChatPanel';
 
 const TOOLS: Array<{ id: string; label: string; color: string }> = [
   { id: 'claude_code', label: 'Claude Code', color: '#F59E0B' },
@@ -15,7 +16,7 @@ const TOOLS: Array<{ id: string; label: string; color: string }> = [
 const colorOf = (tool: string) => TOOLS.find((t) => t.id === tool)?.color || '#8B8FA3';
 const labelOf = (tool: string) => (tool === 'user' ? 'You' : TOOLS.find((t) => t.id === tool)?.label || 'AI tool');
 
-export const ContextView: React.FC<{ roomId: string; demoRoomId?: string; onOpenDemo?: () => void }> = ({ roomId, demoRoomId, onOpenDemo }) => {
+export const ContextView: React.FC<{ roomId: string; demoRoomId?: string; onOpenDemo?: () => void; onOpenKeys?: () => void }> = ({ roomId, demoRoomId, onOpenDemo, onOpenKeys }) => {
   const qc = useQueryClient();
   const [note, setNote] = useState('');
   const [next, setNext] = useState('');
@@ -111,6 +112,7 @@ export const ContextView: React.FC<{ roomId: string; demoRoomId?: string; onOpen
               <ArrowRight className="w-5 h-5 text-[#818CF8]" />
             </button>
           )}
+          <ChatPanel roomId={roomId} onOpenKeys={onOpenKeys} />
           <DemoChat roomId={roomId} />
           <form onSubmit={save} className="baton-lift rounded-3xl border border-[#2A2D37] bg-[#111217] p-5 space-y-3">
             <div className="text-[13px] font-semibold text-[#E6E7EB]">Leave a note for the next AI</div>

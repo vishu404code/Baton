@@ -83,3 +83,7 @@ class AgentError(Exception):
 
     def to_api(self) -> "ApiError":
         return ApiError(self.HTTP.get(self.code, 400), self.message, code=self.code)
+
+
+def bad_request(message: str) -> ApiError:
+    return ApiError(400, message)

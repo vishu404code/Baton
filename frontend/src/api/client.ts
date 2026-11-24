@@ -480,6 +480,18 @@ class ApiClient {
     return this.request(`/api/rooms/${roomId}/context`);
   }
 
+  async getChat(roomId: string): Promise<any> {
+    return this.request(`/api/rooms/${roomId}/context/chat`);
+  }
+
+  async sendChat(roomId: string, provider: string, text: string): Promise<any> {
+    return this.request(`/api/rooms/${roomId}/context/chat`, { method: 'POST', body: JSON.stringify({ provider, text }) });
+  }
+
+  async clearChat(roomId: string): Promise<void> {
+    await this.request(`/api/rooms/${roomId}/context/chat`, { method: 'DELETE' });
+  }
+
   async getDemo(roomId: string): Promise<any> {
     return this.request(`/api/rooms/${roomId}/context/demo`);
   }

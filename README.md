@@ -25,6 +25,12 @@ cd desktop && npm run pack      # creates desktop/dist/mac-arm64/Baton.app
 
 Your data lives in `~/Library/Application Support/Baton/` (`data/baton.db`, `logs/`). Help → *Open data folder* shows it.
 
+## Chat with several AIs in one place
+
+On the **Context** screen, add API keys under **Tools & keys**, then pick **Claude, ChatGPT, Gemini or DeepSeek** and type a message. Every AI you ask reads the same shared memory first, so you can ask Claude, then ChatGPT, then Gemini and nobody needs the project explained again. Each answer is saved to the shared memory, so tools such as Claude Code, Codex and Antigravity (connected over MCP) see it too, and the other way round.
+
+The project **Live demo: Jaipur trip** has a one-click scripted demo of the same flow.
+
 ## Switch between AI tools without re-explaining
 
 Baton connects Claude Code, Codex (ChatGPT app), Antigravity and Gemini CLI over MCP and gives them one shared memory.

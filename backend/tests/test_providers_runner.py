@@ -302,3 +302,44 @@ def test_antigravity_connect_snippet(world, client):
     snip = r.json()["config"]["snippets"]["antigravity"]
     cfg = json.loads(snip["mcp_config_json"])["mcpServers"]["baton"]
     assert cfg["serverUrl"].endswith("/mcp") and cfg["headers"]["Authorization"] == f"Bearer {r.json()['token']}"
+
+
+def test_chat_two_llms_in_turn_share_memory(world, client, fake_ai):
+    asha = world.asha
+    _setup(client, asha, "anthropic", fake_ai, "claude-test-1")
+    _setup(client, asha, "openai", fake_ai + "/openai", "gpt-test")
+    base = f"/api/rooms/{world.room_id}/context/chat"
+
+    # No key for Gemini: refused clearly, nothing stored.
+    r = client.post(base, json={"provider": "gemini", "text": "hello"}, headers=asha["h"])
+    assert r.status_code == 400 and "No API key for Gemini" in r.json()["error"]["message"]
+
+    def ask(provider, text):
+        assert client.post(base, json={"provider": provider, "text": text}, headers=asha["h"]).status_code == 202
+        end = time.time() + 20
+        while time.time() < end:
+            st = client.get(base, headers=asha["h"]).json()
+            if st["pending"] is None and st["messages"] and st["messages"][-1]["role"] != "user":
+                return st
+            time.sleep(0.1)
+        raise AssertionError("chat did not finish")
+
+    ask("anthropic", "Where should we start planning the trip to Jaipur?")
+    st = ask("openai", "Now make the itinerary.")
+    assert [m["role"] for m in st["messages"]] == ["user", "ai", "user", "ai"]
+    assert [m["label"] for m in st["messages"] if m["role"] == "ai"] == ["Claude", "ChatGPT"]
+
+    # The second AI was sent the shared memory: it saw what the first one was asked and answered.
+    openai_req = [r for r in REQUESTS if r["path"].startswith("/openai/chat/completions")][-1]["body"]
+    sent = json.dumps(openai_req)
+    assert "Jaipur" in sent and "Asked:" in sent and "Claude" in sent
+
+    ctx = client.get(f"/api/rooms/{world.room_id}/context", headers=asha["h"]).json()
+    assert [e["author"] for e in ctx["entries"]][:2] == ["ChatGPT", "Claude"]
+    assert "Where should we start planning" in ctx["handoff_markdown"]
+
+    # A failing provider gives a readable error message in the chat, not a hang.
+    FAIL_AUTH["on"] = True
+    st = ask("anthropic", "Check budget")
+    assert st["messages"][-1]["role"] == "error" and "rejected the API key" in st["messages"][-1]["content"]
+    assert client.delete(base, headers=asha["h"]).status_code == 204
