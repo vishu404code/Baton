@@ -3,9 +3,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Send, Check, Loader2, MessageSquare, Trash2, KeyRound } from 'lucide-react';
 import { api } from '../api/client';
 
-const COLORS: Record<string, string> = { anthropic: '#F59E0B', openai: '#22D3EE', gemini: '#60A5FA', deepseek: '#34D399' };
+const COLORS: Record<string, string> = { anthropic: '#F59E0B', openai: '#22D3EE', gemini: '#60A5FA', antigravity: '#A78BFA', deepseek: '#34D399' };
 
-interface Seat { provider: string; label: string; model: string; ready: boolean }
+interface Seat { provider: string; label: string; model: string; ready: boolean; via: string | null }
 interface Msg { id: string; role: 'user' | 'ai' | 'error'; provider: string | null; label: string | null; model: string | null; content: string }
 interface Pending { provider: string; label: string; prompt: string; phase: string; reply: string; read_count: number }
 interface ChatState { messages: Msg[]; pending: Pending | null; seats: Seat[] }
@@ -137,7 +137,7 @@ export const ChatPanel: React.FC<{ roomId: string; onOpenKeys?: () => void }> = 
         {empty && (
           <div className="text-center py-4 space-y-3">
             <div className="text-[13px] text-[#8B8FA3]">
-              {anyReady ? 'Pick an AI below and ask anything. Try:' : 'Add an API key for at least one AI to start chatting.'}
+              {anyReady ? 'Pick an AI below and ask anything. Try:' : 'No AI app found on this computer. Add an API key to start chatting.'}
             </div>
             {anyReady ? (
               <div className="flex flex-wrap justify-center gap-2">
@@ -190,7 +190,7 @@ export const ChatPanel: React.FC<{ roomId: string; onOpenKeys?: () => void }> = 
             return (
               <button type="button" key={s.provider} onClick={() => setProvider(s.provider)}
                 className={`px-3 py-1.5 rounded-full border text-[12.5px] font-medium flex items-center gap-2 transition-colors ${on ? 'border-[#6366F1] bg-[#6366F1]/10 text-[#E6E7EB]' : 'border-[#2A2D37] bg-[#1D1F27] text-[#8B8FA3] hover:text-[#E6E7EB]'}`}
-                title={s.ready ? `${s.label} (${s.model})` : `No API key for ${s.label} yet`}>
+                title={s.ready ? `${s.label}: ${s.model}, using ${s.via}` : `${s.label} isn't available yet`}>
                 <span className="w-2 h-2 rounded-full" style={{ background: s.ready ? COLORS[s.provider] : 'transparent', boxShadow: s.ready ? 'none' : 'inset 0 0 0 1.5px #9A8FA6' }} />
                 {s.label}
               </button>
@@ -199,8 +199,8 @@ export const ChatPanel: React.FC<{ roomId: string; onOpenKeys?: () => void }> = 
         </div>
         {seat && !seat.ready && (
           <div className="text-[12px] text-[#8B8FA3]">
-            {seat.label} has no API key yet.{' '}
-            {onOpenKeys && <button type="button" onClick={onOpenKeys} className="text-[#818CF8] underline">Add one under Tools & keys</button>}
+            {seat.label} isn't available on this computer.{' '}
+            {onOpenKeys && <button type="button" onClick={onOpenKeys} className="text-[#818CF8] underline">Add an API key under Tools & keys</button>}
           </div>
         )}
         <div className="flex gap-2.5 items-end">
@@ -217,7 +217,7 @@ export const ChatPanel: React.FC<{ roomId: string; onOpenKeys?: () => void }> = 
           </button>
         </div>
         {err && <div className="text-[12px] text-[#EF4444]">{err}</div>}
-        <div className="text-[11px] text-[#8B8FA3]">Tools like Claude Code, Codex and Antigravity join the same memory through MCP and show up in the timeline below.</div>
+        <div className="text-[11px] text-[#8B8FA3]">No keys needed: Baton uses the Claude, ChatGPT and Antigravity apps already signed in on this computer. Those tools also read and write this memory through MCP.</div>
       </form>
     </div>
   );

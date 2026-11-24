@@ -312,7 +312,7 @@ def test_chat_two_llms_in_turn_share_memory(world, client, fake_ai):
 
     # No key for Gemini: refused clearly, nothing stored.
     r = client.post(base, json={"provider": "gemini", "text": "hello"}, headers=asha["h"])
-    assert r.status_code == 400 and "No API key for Gemini" in r.json()["error"]["message"]
+    assert r.status_code == 400 and "Gemini isn't available" in r.json()["error"]["message"]
 
     def ask(provider, text):
         assert client.post(base, json={"provider": provider, "text": text}, headers=asha["h"]).status_code == 202
@@ -343,3 +343,34 @@ def test_chat_two_llms_in_turn_share_memory(world, client, fake_ai):
     st = ask("anthropic", "Check budget")
     assert st["messages"][-1]["role"] == "error" and "rejected the API key" in st["messages"][-1]["content"]
     assert client.delete(base, headers=asha["h"]).status_code == 204
+
+
+def test_chat_works_with_no_api_key_through_an_installed_app(world, client, monkeypatch, tmp_path):
+    """The user adds nothing: Baton uses the AI apps already signed in on the computer."""
+    from app.llm import cli_provider
+
+    fake = tmp_path / "claude"
+    fake.write_text("#!/bin/sh\ncat > \"$0.stdin\"\necho 'Budget first: 40,000 rupees for four friends.'\n")
+    fake.chmod(0o755)
+    monkeypatch.delenv("BATON_DISABLE_CLI")
+    monkeypatch.setattr(cli_provider.CLI_SEATS["anthropic"], "finder", lambda: str(fake))
+    monkeypatch.setattr(cli_provider.CLI_SEATS["openai"], "finder", lambda: None)
+    monkeypatch.setattr(cli_provider.CLI_SEATS["gemini"], "finder", lambda: None)
+    monkeypatch.setattr(cli_provider.CLI_SEATS["antigravity"], "finder", lambda: None)
+    asha = world.asha
+    base = f"/api/rooms/{world.room_id}/context/chat"
+    seats = {s["provider"]: s for s in client.get(base, headers=asha["h"]).json()["seats"]}
+    assert seats["anthropic"]["ready"] is True and seats["anthropic"]["via"] == "your login" and seats["openai"]["ready"] is False
+
+    assert client.post(base, json={"provider": "anthropic", "text": "Plan a Jaipur trip"}, headers=asha["h"]).status_code == 202
+    end = time.time() + 20
+    while time.time() < end:
+        st = client.get(base, headers=asha["h"]).json()
+        if st["pending"] is None and st["messages"][-1]["role"] != "user":
+            break
+        time.sleep(0.1)
+    assert st["messages"][-1]["role"] == "ai" and "40,000 rupees" in st["messages"][-1]["content"]
+    sent = (tmp_path / "claude.stdin").read_text()
+    assert "Plan a Jaipur trip" in sent and "Do not call any tools" in sent  # memory + instruction reached the app
+    ctx = client.get(f"/api/rooms/{world.room_id}/context", headers=asha["h"]).json()
+    assert ctx["entries"][0]["author"] == "Claude" and "40,000 rupees" in ctx["entries"][0]["summary"]

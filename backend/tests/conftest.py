@@ -15,6 +15,7 @@ _TMP = tempfile.mkdtemp(prefix="baton-test-")
 os.environ["BATON_DATA_DIR"] = os.path.join(_TMP, "data")  # must be set before app modules import
 os.environ["BATON_CHECK_DELAY_MS"] = "0"
 os.environ["BATON_DEFAULT_REQUIRE_APPROVAL"] = "true"  # most tests exercise the approval flow
+os.environ["BATON_DISABLE_CLI"] = "1"  # tests never launch the real Claude/Codex/Antigravity apps
 os.environ["BATON_PUBLIC_URL"] = "http://localhost:8000"
 os.environ["BATON_PROVIDER_KEYS_FILE"] = os.path.join(_TMP, "providers.json")
 

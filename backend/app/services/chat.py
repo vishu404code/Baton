@@ -11,17 +11,18 @@ import uuid
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.llm import registry, store
-from app.llm.base import LLMError
+from app.llm import cli_provider, registry, store
+from app.llm.base import LLMError, ProviderConfig
 from app.models import ChatMessage, Room
 from app.serializers import actor_user
 from app.services import context as context_svc
 from app.services.events import iso
 
-SEATS = {  # provider id -> (short name shown in the chat, tool id used on the Context screen)
+SEATS = {  # seat id -> (short name shown in the chat, tool id used on the Context screen)
     "anthropic": ("Claude", "claude_code"),
     "openai": ("ChatGPT", "codex"),
     "gemini": ("Gemini", "gemini_cli"),
+    "antigravity": ("Antigravity", "antigravity"),
     "deepseek": ("DeepSeek", "other"),
 }
 HISTORY = 8  # recent messages included verbatim
@@ -35,12 +36,24 @@ def message_out(m: ChatMessage) -> dict:
             "content": m.content, "created_at": iso(m.created_at)}
 
 
+def resolve(pid: str):
+    """How a seat is answered: an API key if the user added one, else the app already signed in on this computer."""
+    label, _ = SEATS[pid]
+    if pid in registry.PROVIDERS:
+        cfg = store.config(registry.PROVIDERS[pid].info)
+        if cfg.api_key:
+            return registry.PROVIDERS[pid], cfg, cfg.model, "api key"
+    cli = cli_provider.CLI_SEATS.get(pid)
+    if cli is not None and cli.available():
+        return cli, ProviderConfig(api_key="", model=cli.model_label), cli.model_label, "your login"
+    return None, None, None, None
+
+
 def seats() -> list[dict]:
     out = []
     for pid, (label, tool) in SEATS.items():
-        info = registry.PROVIDERS[pid].info
-        cfg = store.get(info)
-        out.append({"provider": pid, "label": label, "tool": tool, "model": cfg["model"], "ready": bool(cfg["api_key"])})
+        prov, _cfg, model, via = resolve(pid)
+        out.append({"provider": pid, "label": label, "tool": tool, "model": model or "", "ready": prov is not None, "via": via})
     return out
 
 
@@ -61,11 +74,10 @@ def send(db, room: Room, user, provider: str, text: str) -> dict:
     """Validate, store the user's message, and answer in the background."""
     if provider not in SEATS:
         raise LLMError("Pick Claude, ChatGPT, Gemini or DeepSeek.")
-    info = registry.PROVIDERS[provider].info
-    cfg = store.config(info)
     label, tool = SEATS[provider]
-    if not cfg.api_key:
-        raise LLMError(f"No API key for {label} yet. Add it under Tools & keys, then ask again.")
+    prov, _cfg, _model, _via = resolve(provider)
+    if prov is None:
+        raise LLMError(f"{label} isn't available on this computer yet. Add an API key for it under Tools & keys.")
     rid = str(room.id)
     with _lock:
         if rid in _pending:
@@ -94,7 +106,6 @@ def _transcript(db, room_id, exclude_id=None) -> str:
 def _answer(room_id, user_id, user_name, provider, text) -> None:
     rid = str(room_id)
     label, tool = SEATS[provider]
-    info = registry.PROVIDERS[provider].info
     try:
         time.sleep(0.4)
         with SessionLocal() as db:
@@ -108,8 +119,10 @@ def _answer(room_id, user_id, user_name, provider, text) -> None:
                   "said and decided, never ask the user to repeat it, and keep your answer clear and reasonably short.\n\n" + h["markdown"])
         user_prompt = (("Recent conversation across all assistants:\n\n" + history + "\n\n---\n\n") if history else "") + f"User's new message to you ({label}):\n{text}"
         _set(rid, phase="answering")
-        cfg = store.config(info)
-        completion = registry.get(provider).complete(cfg, system, user_prompt, max_tokens=2000)
+        prov, cfg, model_name, _via = resolve(provider)
+        if prov is None:
+            raise LLMError(f"{label} isn't available on this computer yet. Add an API key for it under Tools & keys.")
+        completion = prov.complete(cfg, system, user_prompt, max_tokens=2000)
         reply = (completion.text or "").strip() or "(empty answer)"
         words = reply.split(" ")
         step = max(1, len(words) // 120)  # reveal quickly, whatever the length
@@ -118,12 +131,13 @@ def _answer(room_id, user_id, user_name, provider, text) -> None:
             time.sleep(0.02)
         _set(rid, reply=reply, phase="saving")
         with SessionLocal() as db:
-            db.add(ChatMessage(room_id=room_id, role="ai", provider=provider, label=label, model=cfg.model, content=reply))
+            db.add(ChatMessage(room_id=room_id, role="ai", provider=provider, label=label, model=model_name, content=reply))
             snippet = " ".join(reply.split())
             snippet = snippet if len(snippet) <= 700 else snippet[:699] + "…"
             asked = " ".join(text.split())[:240]
             context_svc.save_entry(db, room_id, author=label, tool=tool, summary=f'Asked: "{asked}" Answered: {snippet}',
                                    actor=actor_user_by_id(db, user_id, user_name), kind="progress")
+            _touch_agent(db, room_id, tool)
             db.commit()
         _set(rid, phase="saved")
         time.sleep(0.6)
@@ -147,3 +161,10 @@ def _save_error(room_id, provider, label, message) -> None:
     with SessionLocal() as db:
         db.add(ChatMessage(room_id=room_id, role="error", provider=provider, label=label, content=message))
         db.commit()
+
+
+def _touch_agent(db, room_id, tool) -> None:
+    from app.models import Agent, utcnow
+
+    for a in db.execute(select(Agent).where(Agent.room_id == room_id, Agent.tool == tool, Agent.revoked_at.is_(None))).scalars():
+        a.last_seen_at = utcnow()
