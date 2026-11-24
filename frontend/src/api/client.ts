@@ -480,6 +480,14 @@ class ApiClient {
     return this.request(`/api/rooms/${roomId}/context`);
   }
 
+  async getKnowledge(): Promise<any> {
+    return this.request('/api/knowledge');
+  }
+
+  async addKnowledgeUrl(url: string): Promise<any> {
+    return this.request('/api/knowledge/url', { method: 'POST', body: JSON.stringify({ url }) });
+  }
+
   async getChat(roomId: string): Promise<any> {
     return this.request(`/api/rooms/${roomId}/context/chat`);
   }

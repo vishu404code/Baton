@@ -298,3 +298,17 @@ class ChatMessage(Base):
     model: Mapped[str | None] = mapped_column(String(80), nullable=True)
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = _ts()
+
+
+class KnowledgeDoc(Base):
+    """A piece of reference knowledge every AI can read (articles, places, itineraries, a fetched web page...)."""
+
+    __tablename__ = "knowledge_docs"
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    source: Mapped[str] = mapped_column(String(80), index=True)  # e.g. "The Jaipur Journals"
+    source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    kind: Mapped[str] = mapped_column(String(24))  # instructions | article | place | itinerary | hotel | person | page ...
+    title: Mapped[str] = mapped_column(String(200))
+    tags: Mapped[str] = mapped_column(String(400), default="")
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = _ts()

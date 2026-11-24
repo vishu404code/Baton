@@ -6,6 +6,7 @@ import { Agent, ContextEntry } from '../api/types';
 import { formatTimeAgo } from '../lib/utils';
 import { DemoChat } from '../components/DemoChat';
 import { ChatPanel } from '../components/ChatPanel';
+import { KnowledgeCard } from '../components/KnowledgeCard';
 
 const TOOLS: Array<{ id: string; label: string; color: string }> = [
   { id: 'claude_code', label: 'Claude Code', color: '#F59E0B' },
@@ -114,6 +115,7 @@ export const ContextView: React.FC<{ roomId: string; demoRoomId?: string; onOpen
           )}
           <ChatPanel roomId={roomId} onOpenKeys={onOpenKeys} />
           <DemoChat roomId={roomId} />
+          <KnowledgeCard />
           <form onSubmit={save} className="baton-lift rounded-3xl border border-[#2A2D37] bg-[#111217] p-5 space-y-3">
             <div className="text-[13px] font-semibold text-[#E6E7EB]">Leave a note for the next AI</div>
             <textarea

@@ -7,11 +7,12 @@ const COLORS: Record<string, string> = { anthropic: '#F59E0B', openai: '#22D3EE'
 
 interface Seat { provider: string; label: string; model: string; ready: boolean; via: string | null }
 interface Msg { id: string; role: 'user' | 'ai' | 'error'; provider: string | null; label: string | null; model: string | null; content: string }
-interface Pending { provider: string; label: string; prompt: string; phase: string; reply: string; read_count: number }
+interface Pending { provider: string; label: string; prompt: string; phase: string; reply: string; read_count: number; knowledge_count?: number; site?: string }
 interface ChatState { messages: Msg[]; pending: Pending | null; seats: Seat[] }
 
 const PHASES = [
   { id: 'connecting', label: 'Connecting to Baton' },
+  { id: 'reading_site', label: 'Reading the website' },
   { id: 'reading', label: 'Reading the shared memory' },
   { id: 'answering', label: 'Answering' },
   { id: 'saving', label: 'Saving to memory' },
@@ -164,13 +165,14 @@ export const ChatPanel: React.FC<{ roomId: string; onOpenKeys?: () => void }> = 
         {pending && (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-              {PHASES.map((p, i) => {
+              {PHASES.filter((p) => p.id !== 'reading_site' || pending.site).map((p) => {
+                const i = PHASES.findIndex((x) => x.id === p.id);
                 const done = idx > i || pending.phase === 'saved';
                 const active = idx === i;
                 return (
                   <span key={p.id} className={`px-2.5 py-1 rounded-full border flex items-center gap-1.5 ${active ? 'border-[#6366F1] text-[#818CF8] bg-[#6366F1]/10' : done ? 'border-[#22C55E]/40 text-[#22C55E]' : 'border-[#2A2D37] text-[#8B8FA3]'}`}>
                     {done ? <Check className="w-3 h-3" /> : active ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                    {p.id === 'reading' && active ? `Reading the shared memory (${pending.read_count} ${pending.read_count === 1 ? 'entry' : 'entries'})` : p.label}
+                    {p.id === 'reading' && active ? `Reading memory (${pending.read_count} ${pending.read_count === 1 ? 'entry' : 'entries'}) and ${pending.knowledge_count || 0} knowledge docs` : p.label}
                   </span>
                 );
               })}

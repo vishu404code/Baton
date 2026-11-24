@@ -4,6 +4,7 @@ context entry, so the next AI (here or in an outside tool such as Claude Code) a
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 import uuid
@@ -16,6 +17,7 @@ from app.llm.base import LLMError, ProviderConfig
 from app.models import ChatMessage, Room
 from app.serializers import actor_user
 from app.services import context as context_svc
+from app.services import knowledge as kn
 from app.services.events import iso
 
 SEATS = {  # seat id -> (short name shown in the chat, tool id used on the Context screen)
@@ -108,15 +110,19 @@ def _answer(room_id, user_id, user_name, provider, text) -> None:
     label, tool = SEATS[provider]
     try:
         time.sleep(0.4)
+        note = _ingest_links(rid, text)
         with SessionLocal() as db:
             room = db.get(Room, room_id)
             h = context_svc.build_handoff(db, room, for_name=label)
             history = _transcript(db, room_id)
-        _set(rid, phase="reading", read_count=len(h["entries"]))
+            kblock, kcount = kn.prompt_block(db, text + " " + _recent_user_text(db, room_id))
+        _set(rid, phase="reading", read_count=len(h["entries"]), knowledge_count=kcount)
         time.sleep(0.7)
         system = (f"You are {label}, one of several AI assistants the user switches between inside an app called Baton. "
                   "All of them share the same memory, shown below. Use it: continue naturally from what the other assistants already "
-                  "said and decided, never ask the user to repeat it, and keep your answer clear and reasonably short.\n\n" + h["markdown"])
+                  "said and decided, never ask the user to repeat it, and keep your answer clear and reasonably short. The shared memory may also contain notes from unrelated "
+                  "projects: ignore them unless the user's question is about them.\n\n" + h["markdown"]
+                  + (("\n\n" + kblock) if kblock else "") + (("\n\n" + note) if note else ""))
         user_prompt = (("Recent conversation across all assistants:\n\n" + history + "\n\n---\n\n") if history else "") + f"User's new message to you ({label}):\n{text}"
         _set(rid, phase="answering")
         prov, cfg, model_name, _via = resolve(provider)
@@ -168,3 +174,33 @@ def _touch_agent(db, room_id, tool) -> None:
 
     for a in db.execute(select(Agent).where(Agent.room_id == room_id, Agent.tool == tool, Agent.revoked_at.is_(None))).scalars():
         a.last_seen_at = utcnow()
+
+
+URL_RE = re.compile(r"https?://[^\s<>\")]+")
+
+
+def _recent_user_text(db, room_id) -> str:
+    rows = db.execute(select(ChatMessage.content).where(ChatMessage.room_id == room_id, ChatMessage.role == "user").order_by(ChatMessage.created_at.desc()).limit(3)).scalars()
+    return " ".join(rows)
+
+
+def _ingest_links(rid: str, text: str) -> str:
+    """If the message contains web addresses Baton hasn't read yet, read them now and remember them for every AI."""
+    notes = []
+    for url in dict.fromkeys(URL_RE.findall(text)):
+        url = url.rstrip(".,;")
+        with SessionLocal() as db:
+            known = any(x["url"] and x["url"].rstrip("/") == url.rstrip("/") for x in kn.sources(db))
+        if known:
+            notes.append(f"{url} is already in the knowledge base above, so answer from it. Do not say you cannot open the site.")
+            continue
+        _set(rid, phase="reading_site", site=url)
+        try:
+            docs = kn.fetch_site(url)
+            with SessionLocal() as db:
+                kn.save_docs(db, docs)
+                db.commit()
+            notes.append(f"Baton just read {url} ({len(docs)} documents) and added it to the knowledge base above.")
+        except ValueError as e:
+            notes.append(f"Baton tried to read {url} but could not: {e} Tell the user plainly and ask them to paste the text instead.")
+    return "\n".join(notes)

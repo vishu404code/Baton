@@ -325,6 +325,21 @@ async def get_handoff(ctx: Context) -> dict:
     return await _run(ctx, _get_handoff)
 
 
+def _search_knowledge(db: Session, agent: Agent, query: str, limit: int) -> dict:
+    from app.services import knowledge as kn
+
+    docs = kn.search(db, query, max(1, min(limit, 8)))
+    guide = [d.text for d in kn._all(db) if d.kind == "instructions"]
+    return {"guidelines": guide, "results": [{"title": d.title, "kind": d.kind, "source": d.source, "text": d.text[:6000]} for d in docs]}
+
+
+@server.tool()
+async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> dict:
+    """Search the reference knowledge stored in Baton (for example the articles, places, itineraries and hotels of a
+    website). Use it before answering questions about that subject, and quote what it returns."""
+    return await _run(ctx, _search_knowledge, query, limit)
+
+
 @server.tool()
 async def save_context(ctx: Context, summary: str, next_steps: str | None = None, files: list[str] | None = None, kind: str = "progress") -> dict:
     """Record what you just did so the next AI tool can continue from exactly here. Call it when you finish a

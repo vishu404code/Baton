@@ -55,6 +55,10 @@ def local_session(db: Session = Depends(get_db)) -> dict:
 
     user, room = bootstrap.ensure_local_workspace(db)
     demo_svc.ensure_demo_room(db, user)
+    from app.services import knowledge as kn
+
+    kn.seed_defaults(db)
+    db.commit()
     return {**_issue(db, user), "room_id": str(room.id)}
 
 

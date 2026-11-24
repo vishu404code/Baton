@@ -52,6 +52,11 @@ def build_handoff(db, room: Room, *, for_name: str | None = None) -> dict:
                  "Read this, then continue; do not ask the user to re-explain.")
     brief = ledger.latest(db, room.id, "brief")
     lines += ["", "## Goal", _snip(cur(brief).get("body", ""), 900) if brief else "(no brief written yet)"]
+    from app.services import knowledge as kn
+
+    kidx = kn.index_markdown(db)
+    if kidx:
+        lines += ["", "## Knowledge base", "Reference material about the subject is stored in Baton. Call search_knowledge(query) for the full text before answering questions about it.", kidx]
     decisions = records("decision")
     lines += ["", "## Decisions (binding)"]
     lines += [f"- {ledger.label(d)} ({d.title}): {cur(d).get('statement', '')}" for d in decisions] or ["- none yet"]
