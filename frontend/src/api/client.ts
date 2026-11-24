@@ -21,6 +21,84 @@ import * as mockData from '../mocks/mockData';
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 export const IS_MOCK_ENV = import.meta.env.VITE_MOCK === 'true';
 
+// --- Response adapters -------------------------------------------------------------------------
+// The UI types in ./types.ts were drafted before the backend existed. These functions map Baton's
+// real REST shapes (docs/API_CONTRACT.md) onto them, so every view gets exactly what it expects.
+
+const snippetText = (key: string, s: any): string => {
+  if (typeof s === 'string') return s;
+  if (!s) return '';
+  if (key === 'claude_code') {
+    return [s.command, s.mcp_json ? `# or save as .mcp.json:\n${s.mcp_json}` : ''].filter(Boolean).join('\n\n');
+  }
+  if (key === 'codex') return [s.config_toml, s.env].filter(Boolean).join('\n\n');
+  if (key === 'gemini_cli') return s.settings_json || '';
+  return JSON.stringify(s, null, 2);
+};
+
+const adaptConfig = (c: any): AgentConfigResponse => ({
+  ...c,
+  snippets: Object.fromEntries(
+    Object.entries(c?.snippets || {}).map(([k, v]) => [k, snippetText(k, v)])
+  ),
+});
+
+const adaptRevision = (r: any): Revision => ({
+  ...r,
+  based_on: (r.based_on || []).map((b: any) => ({ ...b, revision: b.revision ?? b.number })),
+  sources: (r.sources || []).map((x: any) => ({ ...x, source_id: x.source_id ?? x.record_id })),
+});
+
+const adaptComment = (c: any): Comment => ({ ...c, body: c.body ?? c.text });
+
+const adaptSubmission = (s: any): Submission => {
+  const failed = (s.checks || []).find((c: any) => c.passed === false);
+  return {
+    ...s,
+    attempt: s.attempt ?? s.attempts ?? 1,
+    failed_check: s.failed_check ?? (failed ? failed.name : null),
+    reason: s.reason ?? s.rejection_reason ?? null,
+  };
+};
+
+const adaptPresence = (p: any): PresenceResponse => ({
+  users: (p.users || []).map((u: any) => ({ ...u, id: u.id ?? u.user_id })),
+  agents: (p.agents || []).map((a: any) => ({ ...a, id: a.id ?? a.agent_id })),
+});
+
+const adaptRecovery = (r: any): RecoveryResponse => ({
+  items: (r.items || []).map((it: any) => {
+    const rr = it.result_revision;
+    let attempt = 1;
+    return {
+      ...it,
+      task_label: it.task_label ?? it.task?.label ?? '',
+      result_revision: typeof rr === 'string' ? rr : rr ? `${rr.label} v${rr.number}` : undefined,
+      timeline: (it.timeline || []).map((t: any) => {
+        if (t.type === 'submission.resumed') attempt = 2;
+        if (t.type === 'submission.duplicate') attempt = it.attempts ?? 3;
+        const status = String(t.status ?? t.type ?? '')
+          .replace(/^(submission|agent)\./, '')
+          .replace('revision.created', 'revision created');
+        return { at: t.at, status, attempt };
+      }),
+    };
+  }),
+});
+
+const adaptPreview = (p: any): StalePreviewResponse => ({
+  stale_count: (p.would_go_stale || []).length,
+  unaffected_count: (p.unaffected || []).length,
+  stale_outputs: (p.would_go_stale || []).map((s: any) => ({
+    record_id: s.record_id,
+    label: s.label,
+    title: s.title,
+    current_revision: s.revision,
+    path: s.path || [],
+    reason: s.reason,
+  })),
+});
+
 class ApiClient {
   private token: string | null = null;
   private isMockMode: boolean = IS_MOCK_ENV;
@@ -101,6 +179,7 @@ class ApiClient {
         throw new Error(message);
       }
 
+      if (res.status === 204) return { revoked: true } as unknown as T;
       return res.json() as Promise<T>;
     } catch (err: any) {
       // If network failed completely and not just 4xx/5xx from server, fallback to mock mode
@@ -201,7 +280,8 @@ class ApiClient {
   }
 
   async getPresence(roomId: string): Promise<PresenceResponse> {
-    return this.request<PresenceResponse>(`/api/rooms/${roomId}/presence`);
+    const res = await this.request<any>(`/api/rooms/${roomId}/presence`);
+    return this.isMockMode ? res : adaptPresence(res);
   }
 
   // --- Agents ---
@@ -214,17 +294,19 @@ class ApiClient {
     roomId: string,
     payload: { name: string; tool: string; role: string }
   ): Promise<{ agent: Agent; token: string; config: AgentConfigResponse }> {
-    return this.request<{ agent: Agent; token: string; config: AgentConfigResponse }>(
+    const res = await this.request<{ agent: Agent; token: string; config: AgentConfigResponse }>(
       `/api/rooms/${roomId}/agents`,
       {
         method: 'POST',
         body: JSON.stringify(payload),
       }
     );
+    return this.isMockMode ? res : { ...res, config: adaptConfig(res.config) };
   }
 
   async getAgentConfig(roomId: string, agentId: string): Promise<AgentConfigResponse> {
-    return this.request<AgentConfigResponse>(`/api/rooms/${roomId}/agents/${agentId}/config`);
+    const res = await this.request<any>(`/api/rooms/${roomId}/agents/${agentId}/config`);
+    return this.isMockMode ? res : adaptConfig(res);
   }
 
   async revokeAgent(roomId: string, agentId: string): Promise<{ revoked: boolean }> {
@@ -256,59 +338,66 @@ class ApiClient {
     revisions: Revision[];
     comments: Comment[];
   }> {
-    return this.request<{
-      record: BatonRecord;
-      revisions: Revision[];
-      comments: Comment[];
-    }>(`/api/records/${recordId}`);
+    const res = await this.request<any>(`/api/records/${recordId}`);
+    if (this.isMockMode) return res;
+    return {
+      ...res,
+      revisions: (res.revisions || []).map(adaptRevision),
+      comments: (res.comments || []).map(adaptComment),
+    };
   }
 
   async createRecord(
     roomId: string,
     payload: { type: string; title: string; content: any }
   ): Promise<BatonRecord> {
-    return this.request<BatonRecord>(`/api/rooms/${roomId}/records`, {
+    const res = await this.request<any>(`/api/rooms/${roomId}/records`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+    return res.record ?? res;
   }
 
   async createRevision(
     recordId: string,
     payload: { content: any; based_on?: any[]; sources?: any[] }
   ): Promise<{ record: BatonRecord; revision: Revision }> {
+    // The UI keeps the edit note inside `content`; the API takes it as a separate field.
+    const { note, ...content } = payload.content || {};
     return this.request<{ record: BatonRecord; revision: Revision }>(
       `/api/records/${recordId}/revisions`,
       {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ content, ...(note ? { note } : {}) }),
       }
     );
   }
 
   async previewRevision(recordId: string, content: any): Promise<StalePreviewResponse> {
-    return this.request<StalePreviewResponse>(`/api/records/${recordId}/revisions/preview`, {
+    const { note: _note, ...rest } = content || {};
+    const res = await this.request<any>(`/api/records/${recordId}/revisions/preview`, {
       method: 'POST',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content: rest }),
     });
+    return this.isMockMode ? res : adaptPreview(res);
   }
 
   async addComment(
     recordId: string,
     payload: { body: string; revision_id?: string }
   ): Promise<Comment> {
-    return this.request<Comment>(`/api/records/${recordId}/comments`, {
+    const res = await this.request<any>(`/api/records/${recordId}/comments`, {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ text: payload.body }),
     });
+    return this.isMockMode ? res : adaptComment(res);
   }
 
   // --- Submissions & Approvals ---
 
   async getSubmissions(roomId: string, limit = 50): Promise<{ submissions: Submission[] }> {
-    return this.request<{ submissions: Submission[] }>(
-      `/api/rooms/${roomId}/submissions?limit=${limit}`
-    );
+    const res = await this.request<any>(`/api/rooms/${roomId}/submissions?limit=${limit}`);
+    return this.isMockMode ? res : { ...res, submissions: (res.submissions || []).map(adaptSubmission) };
   }
 
   async getApprovals(roomId: string): Promise<{ approvals: Approval[] }> {
@@ -320,10 +409,14 @@ class ApiClient {
     decision: 'approve' | 'reject',
     comment?: string
   ): Promise<Approval> {
-    return this.request<Approval>(`/api/approvals/${approvalId}/decide`, {
+    const res = await this.request<any>(`/api/approvals/${approvalId}/decide`, {
       method: 'POST',
-      body: JSON.stringify({ decision, comment }),
+      body: JSON.stringify({
+        decision: decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : decision,
+        ...(comment ? { comment } : {}),
+      }),
     });
+    return res.approval ?? res;
   }
 
   // --- Evidence & Events ---
@@ -344,7 +437,8 @@ class ApiClient {
   }
 
   async getRecovery(roomId: string): Promise<RecoveryResponse> {
-    return this.request<RecoveryResponse>(`/api/rooms/${roomId}/recovery`);
+    const res = await this.request<any>(`/api/rooms/${roomId}/recovery`);
+    return this.isMockMode ? res : adaptRecovery(res);
   }
 
   // --- Mock Request Handler ---
