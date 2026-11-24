@@ -47,7 +47,7 @@ export const SetupView: React.FC<{ roomId: string }> = () => {
         </div>
 
         <div className="baton-lift rounded-3xl border border-[#2A2D37] bg-[#111217] px-5 py-2">
-          {TOOLS.filter((t) => t.id !== 'gemini_cli').map((t) => {
+          {TOOLS.map((t) => {
             const ok = data?.installed?.[t.id];
             return (
               <div key={t.id} className="py-3.5 flex items-center gap-3 text-[13px] border-b last:border-b-0 border-[#2A2D37]">
@@ -61,7 +61,10 @@ export const SetupView: React.FC<{ roomId: string }> = () => {
             );
           })}
         </div>
-        <div className="text-[12px] text-[#8B8FA3] px-1">Codex only: type <code>/hooks</code> once and trust Baton.</div>
+        <div className="text-[12px] text-[#8B8FA3] px-1 space-y-1">
+          <div>Codex: type <code>/hooks</code> once and trust Baton.</div>
+          <div>Gemini: needs Google's Gemini CLI. Install it with <code>npm install -g @google/gemini-cli</code>, run <code>gemini</code> once to sign in, then press Connect tools.</div>
+        </div>
       </div>
     </div>
   );

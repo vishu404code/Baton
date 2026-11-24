@@ -113,9 +113,10 @@ def connect_claude(url: str, token: str) -> str:
     return "claude mcp add (user scope)"
 
 
-HOOK_TOOLS = ("claude_code", "codex", "antigravity")
+HOOK_TOOLS = ("claude_code", "codex", "antigravity", "gemini_cli")
 HOOK_DIR_REL = "Library/Application Support/Baton/hooks"
 EDIT_MATCH = {"claude_code": "Edit|Write|MultiEdit|NotebookEdit|Bash|Read|Grep|Glob|WebFetch|WebSearch", "codex": "apply_patch|Bash",
+              "gemini_cli": "run_shell_command|write_file|replace|read_file|read_many_files|list_directory|glob|grep_search|search_file_content|google_web_search|web_fetch",
               "antigravity": "write_to_file|replace_file_content|multi_replace_file_content|run_command|view_file|list_dir|grep_search|find_by_name|search_web|read_url_content"}
 
 
@@ -178,6 +179,17 @@ def install_hook(tool: str, token: str, base_url: str, project: str) -> list[str
             hooks[ev] = _strip_baton(hooks.get(ev, [])) + [group]
         _write(path, json.dumps(data, indent=2))
         return [("~/.claude/settings.json" if tool == "claude_code" else "~/.codex/hooks.json") + " (hooks)"]
+    if tool == "gemini_cli":
+        path = h / ".gemini" / "settings.json"
+        data = _load_json(path)
+        hooks = data.setdefault("hooks", {})
+        g = lambda ev, matcher: {"matcher": matcher, "hooks": [{"name": "baton", "type": "command", "command": _hook_cmd(tool, ev), "timeout": 5000}]}  # noqa: E731
+        plan = {"SessionStart": g("SessionStart", "startup|resume"), "BeforeAgent": g("BeforeAgent", "*"),
+                "AfterTool": g("AfterTool", EDIT_MATCH[tool]), "AfterAgent": g("AfterAgent", "*")}
+        for ev, group in plan.items():
+            hooks[ev] = _strip_baton(hooks.get(ev, [])) + [group]
+        _write(path, json.dumps(data, indent=2))
+        return ["~/.gemini/settings.json (hooks)"]
     path = h / ".gemini" / "config" / "hooks.json"
     data = _load_json(path)
     data["baton"] = {
@@ -197,7 +209,7 @@ def hooks_installed() -> dict[str, bool]:
             return "baton_hook.py" in p.read_text()
         except OSError:
             return False
-    return {"claude_code": has(h / ".claude/settings.json"), "codex": has(h / ".codex/hooks.json"), "antigravity": has(h / ".gemini/config/hooks.json")}
+    return {"claude_code": has(h / ".claude/settings.json"), "codex": has(h / ".codex/hooks.json"), "antigravity": has(h / ".gemini/config/hooks.json"), "gemini_cli": has(h / ".gemini/settings.json")}
 
 
 def connect_tool(tool: str, url: str, token: str, project: str | None = None) -> list[str]:
